@@ -219,3 +219,7 @@ __marimo__/
 .claude/
 *.tex
 paper_figures/
+# Raw third-party data and regenerable per-dataset outputs (see data/README.md)
+data/raw/
+data/processed/*.csv.gz
+!data/processed/all_datasets.csv.gz
