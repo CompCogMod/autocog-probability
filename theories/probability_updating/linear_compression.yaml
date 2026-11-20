@@ -1,0 +1,35 @@
+name: "Compression toward 50% under cognitive uncertainty (Enke & Graeber 2023)"
+mean_rule: compression
+noise: probability_gaussian
+theory: |
+  People are uncertain about what the correct (Bayesian) answer is and, at the moment of responding, optimally shrink their answer toward a cognitive default of 50%. The reported probability is a weighted average in probability space: lambda times the Bayesian posterior plus (1 - lambda) times 0.5, where 1 - lambda reflects the degree of cognitive uncertainty. This produces the same qualitative pattern as conservatism and base-rate neglect (beliefs too close to 50%), but as a linear compression in probability space rather than a re-weighting of prior and evidence in log-odds space, so it predicts the largest absolute distortions for Bayesian posteriors near 0 or 1. The compression is a decision-time bias: responses scatter around the compressed answer with constant noise in probability space (standard deviation tau), independent of where the answer lies, plus a lapse rate epsilon.
+predict: |
+  def predict(parameters, stimulus, history):
+      # See bayes_noise.yaml for the stimulus / output contract.
+      from scipy.special import ndtr
+      K = 101
+      scalar = np.ndim(stimulus["prior"]) == 0
+      prior = np.clip(np.atleast_1d(np.asarray(stimulus["prior"], dtype=float)), 1e-6, 1 - 1e-6)
+      llr = np.atleast_1d(np.asarray(stimulus["log_lr"], dtype=float))
+      bayes = 1.0 / (1.0 + np.exp(-(np.log(prior) - np.log1p(-prior) + llr)))
+      lam = float(parameters["lam"])
+      m = lam * bayes + (1.0 - lam) * 0.5
+
+      # Probability-space bin edges; mass beyond 0 or 1 piles onto the end bins.
+      edges = (np.arange(K + 1) - 0.5) / (K - 1)
+      edges[0], edges[-1] = -np.inf, np.inf
+      tau = float(parameters["tau"])
+      probs = np.diff(ndtr((edges[None, :] - m[:, None]) / tau), axis=1)
+
+      eps = float(parameters["epsilon"])
+      probs = (1.0 - eps) * probs + eps / K
+      probs = probs / probs.sum(axis=1, keepdims=True)
+      return probs[0] if scalar else probs
+policy: |
+  def policy(probabilities):
+      probabilities = probabilities / probabilities.sum()
+      return int(np.random.choice(len(probabilities), p=probabilities))
+parameters:
+  lam: "[0.0, 1.0]"        # weight on the Bayesian answer (1 = no compression)
+  tau: "[0.005, 0.5]"      # response noise in probability units
+  epsilon: "[0.0, 0.6]"    # lapse rate

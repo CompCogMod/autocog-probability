@@ -1,0 +1,36 @@
+name: "Compression toward 50% with log-odds noise"
+mean_rule: compression
+noise: logodds_gaussian
+theory: |
+  People shrink the Bayesian posterior toward 50% when they respond, as in the cognitive-uncertainty account: the central judgment is lambda * Bayesian posterior + (1 - lambda) * 0.5, a linear compression in probability space. The response noise lives in log-odds space instead of probability space: the report's log-odds are normally distributed around the log-odds of the compressed judgment with standard deviation sigma. Log-odds noise makes reports less variable near 0% and 100% than near 50%, mimicking the variance pattern of sampling without any sampling. Together with the probability-noise version and the Bayesian sampler, this separates compression of the mean from the shape of the noise. A lapse rate epsilon gives occasional random reports.
+predict: |
+  def predict(parameters, stimulus, history):
+      # See bayes_noise.yaml for the stimulus / output contract.
+      from scipy.special import ndtr
+      K = 101
+      scalar = np.ndim(stimulus["prior"]) == 0
+      prior = np.clip(np.atleast_1d(np.asarray(stimulus["prior"], dtype=float)), 1e-6, 1 - 1e-6)
+      llr = np.atleast_1d(np.asarray(stimulus["log_lr"], dtype=float))
+      bayes = 1.0 / (1.0 + np.exp(-(np.log(prior) - np.log1p(-prior) + llr)))
+      lam = float(parameters["lam"])
+      m = np.clip(lam * bayes + (1.0 - lam) * 0.5, 1e-9, 1 - 1e-9)
+      mu = np.log(m) - np.log1p(-m)
+
+      edges = np.clip((np.arange(K + 1) - 0.5) / (K - 1), 0.0, 1.0)
+      with np.errstate(divide="ignore"):
+          z_edges = np.log(edges) - np.log1p(-edges)
+      sigma = float(parameters["sigma"])
+      probs = np.diff(ndtr((z_edges[None, :] - mu[:, None]) / sigma), axis=1)
+
+      eps = float(parameters["epsilon"])
+      probs = (1.0 - eps) * probs + eps / K
+      probs = probs / probs.sum(axis=1, keepdims=True)
+      return probs[0] if scalar else probs
+policy: |
+  def policy(probabilities):
+      probabilities = probabilities / probabilities.sum()
+      return int(np.random.choice(len(probabilities), p=probabilities))
+parameters:
+  lam: "[0.0, 1.0]"        # weight on the Bayesian answer (1 = no compression)
+  sigma: "[0.05, 5.0]"     # response noise in log-odds units
+  epsilon: "[0.0, 0.6]"    # lapse rate

@@ -1,0 +1,31 @@
+name: "Bayes plus constant probability-space noise"
+mean_rule: bayes
+noise: probability_gaussian
+theory: |
+  People compute the correct Bayesian posterior and report it with symmetric noise of constant size in probability space (standard deviation tau), so a report is as variable when the Bayesian answer is 0.95 as when it is 0.5; noise that would push a report beyond 0% or 100% piles up at the end of the scale. With probability epsilon the subject lapses and reports a uniformly random percentage. This is the Bayesian baseline with the same noise model as compression toward 50%, so comparing the two isolates the effect of compression on the mean.
+predict: |
+  def predict(parameters, stimulus, history):
+      # See bayes_noise.yaml for the stimulus / output contract.
+      from scipy.special import ndtr
+      K = 101
+      scalar = np.ndim(stimulus["prior"]) == 0
+      prior = np.clip(np.atleast_1d(np.asarray(stimulus["prior"], dtype=float)), 1e-6, 1 - 1e-6)
+      llr = np.atleast_1d(np.asarray(stimulus["log_lr"], dtype=float))
+      m = 1.0 / (1.0 + np.exp(-(np.log(prior) - np.log1p(-prior) + llr)))
+
+      edges = (np.arange(K + 1) - 0.5) / (K - 1)
+      edges[0], edges[-1] = -np.inf, np.inf
+      tau = float(parameters["tau"])
+      probs = np.diff(ndtr((edges[None, :] - m[:, None]) / tau), axis=1)
+
+      eps = float(parameters["epsilon"])
+      probs = (1.0 - eps) * probs + eps / K
+      probs = probs / probs.sum(axis=1, keepdims=True)
+      return probs[0] if scalar else probs
+policy: |
+  def policy(probabilities):
+      probabilities = probabilities / probabilities.sum()
+      return int(np.random.choice(len(probabilities), p=probabilities))
+parameters:
+  tau: "[0.005, 0.5]"      # response noise in probability units
+  epsilon: "[0.0, 0.6]"    # lapse rate

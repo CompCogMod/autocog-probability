@@ -1,0 +1,37 @@
+name: "Bayes plus response noise (baseline)"
+mean_rule: bayes
+noise: logodds_gaussian
+theory: |
+  People compute the normatively correct Bayesian posterior: posterior log-odds equal prior log-odds plus the log likelihood ratio of the evidence, with the prior and the evidence each given full weight. All deviations from Bayes are unsystematic: the reported probability is the Bayesian posterior perturbed by symmetric noise in log-odds space (standard deviation sigma), so reports scatter around the Bayesian answer and are compressed in probability space only because extreme log-odds map to probabilities near 0 or 1. With probability epsilon the subject lapses and reports a uniformly random percentage. This is the null model against which systematic distortions (base-rate neglect, conservatism, compression toward 50%, sampling variability) are measured.
+predict: |
+  def predict(parameters, stimulus, history):
+      # stimulus: dict of scalars (one trial) or equal-length arrays (a batch)
+      # with keys prior, log_lr, ... (see ProbabilityUpdatingExperiment).
+      # Returns probabilities over the 101 response bins 0%, 1%, ..., 100%
+      # (shape (101,) for one trial, (n, 101) for a batch). history is unused.
+      from scipy.special import ndtr
+      K = 101
+      scalar = np.ndim(stimulus["prior"]) == 0
+      prior = np.clip(np.atleast_1d(np.asarray(stimulus["prior"], dtype=float)), 1e-6, 1 - 1e-6)
+      llr = np.atleast_1d(np.asarray(stimulus["log_lr"], dtype=float))
+      mu = np.log(prior) - np.log1p(-prior) + llr
+
+      # Bin edges halfway between grid points, mapped to log-odds (0 -> -inf, 1 -> +inf).
+      edges = np.clip((np.arange(K + 1) - 0.5) / (K - 1), 0.0, 1.0)
+      with np.errstate(divide="ignore"):
+          z_edges = np.log(edges) - np.log1p(-edges)
+      sigma = float(parameters["sigma"])
+      cdf = ndtr((z_edges[None, :] - mu[:, None]) / sigma)
+      probs = np.diff(cdf, axis=1)
+
+      eps = float(parameters["epsilon"])
+      probs = (1.0 - eps) * probs + eps / K
+      probs = probs / probs.sum(axis=1, keepdims=True)
+      return probs[0] if scalar else probs
+policy: |
+  def policy(probabilities):
+      probabilities = probabilities / probabilities.sum()
+      return int(np.random.choice(len(probabilities), p=probabilities))
+parameters:
+  sigma: "[0.05, 5.0]"     # response noise in log-odds units
+  epsilon: "[0.0, 0.6]"    # lapse rate (uniform random report)

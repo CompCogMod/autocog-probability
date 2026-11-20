@@ -1,0 +1,43 @@
+name: "Pure sampling from the Bayesian posterior (no correction toward 50%)"
+mean_rule: bayes
+noise: sampling
+theory: |
+  People estimate the correct Bayesian posterior by drawing N mental samples from it and reporting the proportion k/N of samples in which H holds, with no prior correction toward 50%. On average the report equals the Bayesian posterior, so there is no systematic distortion of the mean; all deviations come from sampling variability, which is binomial: largest when the posterior is near 50% and vanishing near 0% and 100%. A small motor/reporting noise tau smears the discrete values k/N onto the 0-100 scale, and a lapse rate epsilon gives occasional random reports. Non-integer N mixes the neighbouring integer sample sizes. This is the Bayesian sampler with its Beta(b, b) correction switched off (b = 0), isolating sampling noise from compression.
+predict: |
+  def predict(parameters, stimulus, history):
+      # See bayes_noise.yaml for the stimulus / output contract.
+      from scipy.special import ndtr
+      from scipy.stats import binom
+      K = 101
+      scalar = np.ndim(stimulus["prior"]) == 0
+      prior = np.clip(np.atleast_1d(np.asarray(stimulus["prior"], dtype=float)), 1e-6, 1 - 1e-6)
+      llr = np.atleast_1d(np.asarray(stimulus["log_lr"], dtype=float))
+      target = 1.0 / (1.0 + np.exp(-(np.log(prior) - np.log1p(-prior) + llr)))
+
+      tau = float(parameters["tau"])
+      edges = (np.arange(K + 1) - 0.5) / (K - 1)
+      edges[0], edges[-1] = -np.inf, np.inf
+
+      def report_dist(n):
+          k = np.arange(n + 1)
+          pmf = binom.pmf(k[None, :], n, target[:, None])
+          to_bins = np.diff(ndtr((edges[None, :] - (k / n)[:, None]) / tau), axis=1)
+          return pmf @ to_bins
+
+      N = float(parameters["N"])
+      n0 = max(int(np.floor(N)), 1)
+      w = min(max(N - n0, 0.0), 1.0)
+      probs = report_dist(n0) if w == 0.0 else (1.0 - w) * report_dist(n0) + w * report_dist(n0 + 1)
+
+      eps = float(parameters["epsilon"])
+      probs = (1.0 - eps) * probs + eps / K
+      probs = probs / probs.sum(axis=1, keepdims=True)
+      return probs[0] if scalar else probs
+policy: |
+  def policy(probabilities):
+      probabilities = probabilities / probabilities.sum()
+      return int(np.random.choice(len(probabilities), p=probabilities))
+parameters:
+  N: "[1.0, 200.0]"        # number of mental samples
+  tau: "[0.005, 0.2]"      # motor / reporting noise in probability units
+  epsilon: "[0.0, 0.6]"    # lapse rate

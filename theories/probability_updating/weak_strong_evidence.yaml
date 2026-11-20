@@ -1,0 +1,39 @@
+name: "Concave evidence weighting: overinference from weak, underinference from strong signals (Augenblick, Lazarus & Thaler 2025)"
+mean_rule: weak_strong_weighting
+noise: logodds_gaussian
+theory: |
+  People misperceive the strength of evidence when they form a judgment. The perceived log likelihood ratio is a concave power function of the true one: perceived = beta * sign(LLR) * |LLR|^gamma with gamma < 1. Weak evidence (small |LLR|) is therefore over-weighted relative to Bayes and strong evidence is under-weighted, producing overreaction to weak signals and underreaction to strong ones from a single mechanism; gamma = 1 recovers linear-in-log-odds weighting. The prior enters with weight alpha in log-odds space. As in other decision-time bias accounts, the distortion is deterministic: responses scatter around the distorted posterior with constant log-odds noise sigma and lapse rate epsilon, so the bias in the mean is unrelated to the amount of response variability.
+predict: |
+  def predict(parameters, stimulus, history):
+      # See bayes_noise.yaml for the stimulus / output contract.
+      from scipy.special import ndtr
+      K = 101
+      scalar = np.ndim(stimulus["prior"]) == 0
+      prior = np.clip(np.atleast_1d(np.asarray(stimulus["prior"], dtype=float)), 1e-6, 1 - 1e-6)
+      llr = np.atleast_1d(np.asarray(stimulus["log_lr"], dtype=float))
+      alpha = float(parameters["alpha"])
+      beta = float(parameters["beta"])
+      gamma = float(parameters["gamma"])
+      perceived = beta * np.sign(llr) * np.abs(llr) ** gamma
+      mu = alpha * (np.log(prior) - np.log1p(-prior)) + perceived
+
+      edges = np.clip((np.arange(K + 1) - 0.5) / (K - 1), 0.0, 1.0)
+      with np.errstate(divide="ignore"):
+          z_edges = np.log(edges) - np.log1p(-edges)
+      sigma = float(parameters["sigma"])
+      probs = np.diff(ndtr((z_edges[None, :] - mu[:, None]) / sigma), axis=1)
+
+      eps = float(parameters["epsilon"])
+      probs = (1.0 - eps) * probs + eps / K
+      probs = probs / probs.sum(axis=1, keepdims=True)
+      return probs[0] if scalar else probs
+policy: |
+  def policy(probabilities):
+      probabilities = probabilities / probabilities.sum()
+      return int(np.random.choice(len(probabilities), p=probabilities))
+parameters:
+  alpha: "[0.0, 3.0]"      # weight on prior log-odds
+  beta: "[0.0, 3.0]"       # scale of perceived evidence
+  gamma: "[0.1, 1.5]"      # curvature of evidence perception (< 1 = weak over-, strong under-weighted)
+  sigma: "[0.05, 5.0]"     # response noise in log-odds units
+  epsilon: "[0.0, 0.6]"    # lapse rate

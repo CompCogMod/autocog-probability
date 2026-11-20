@@ -162,6 +162,47 @@ summary/scoring script at the end (e.g. `score_blind_design.sh` →
 > your venv) before running them anywhere else. Most accept `LLM_PROVIDER=mock`
 > for a free harness check.
 
+### Probability updating: comparing theories on existing data
+
+The probability-updating domain asks how people turn a prior and evidence
+into a reported probability, and whether distortions come from a bias at
+decision time or from noisy sampling. It reuses the autocog theory format, but
+scores theories by likelihood against human data, so it needs no LLM calls.
+
+- **Data:** `data/processed/all_datasets.csv.gz` stacks 7 belief-updating
+  studies (98,656 judgments) in one trial-level schema. See `data/README.md`
+  for sources and `scripts/convert_data/` to rebuild it from the raw downloads.
+- **Theories:** `theories/probability_updating/*.yaml`. Each `predict` returns
+  a distribution over the 101 response bins (0–100%) and broadcasts over a
+  batch of trials. Each is tagged with a `mean_rule` (Bayes, log-odds
+  weighting, compression toward 50%) and a `noise` type (Gaussian in log-odds,
+  Gaussian in probability, binomial sampling). Together they fill the 3 x 3
+  grid, plus weak/strong evidence distortion. This separates a distortion
+  applied when the judgment is formed from noise produced by sampling.
+- **Domain:** `src/probability_updating/` holds the data loader, the
+  `ProbabilityUpdatingExperiment` class used by the autocog loop, and the
+  maximum-likelihood fitter.
+
+```bash
+uv run python main_probability_compare.py               # all studies x all theories, 5-fold subject CV
+uv run python main_probability_compare.py --cv_folds 0 --groups enke_graeber2023/A_beliefs
+```
+
+Results go to `results/probability_updating/comparison/`:
+- `fits.csv`: NLL, AIC, BIC, cross-validated NLL and parameters for every study × theory
+- `predictive_check.csv`: observed vs. predicted response mean and SD by decile of the Bayesian posterior
+- `summary.md`: per-study ranking and winners, plus the best mean rule and the best noise type per study
+
+Every theory's prediction passes through the same reporting stage before it
+is scored: each study's response scale (e.g. an 11-point scale), plus fitted
+probabilities of rounding to the nearest 5% or 10%. Without it, a theory
+whose outputs happen to sit on round numbers wins for that reason alone. Turn
+it off with `--no_rounding`.
+
+Any theory that follows this contract and declares its parameters as
+`"[lo, hi]"` ranges can be scored, including theories autocog proposes or
+improves.
+
 ## 6. Repository map
 
 ```text
@@ -172,11 +213,14 @@ src/                     the framework (imported as src.*)
   llm.py                   provider clients (gemini/anthropic/openai/princeton/openrouter/mock)
   controls.py, ablations.py, jsd.py   control / ablation variants & the JSD metric
   experiment.py, observation.py, metric.py, feedback.py
-  decision_making_binary_features/  heuristic_decision_making/
+  decision_making_binary_features/  heuristic_decision_making/  probability_updating/
   prompts/                 prompt templates
 theories/heuristic_decision_making/   seed + ground-truth theory YAMLs
+theories/probability_updating/        probability-updating seed theories
+data/                    belief-updating datasets (raw is git-ignored; see data/README.md)
 configs/                 LLM/run configs (default.yaml, mock.yaml, jsd_threshold.json)
 scripts/                 analysis & plotting (plot_*.py, recovery_*.py, eval_*.py)
+  convert_data/            raw belief-updating datasets -> shared trial-level schema
   preregistration/         the preregistered follow-up study (build / run / analyse)
   run_*.sh / score_*.sh    batch sweep + scoring wrappers
   smoke_analyses.sh        runs every reported analysis (see §7)

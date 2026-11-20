@@ -1,0 +1,36 @@
+name: "Linear-in-log-odds weighting (Grether 1980; Benjamin 2019)"
+mean_rule: logodds_weighting
+noise: logodds_gaussian
+theory: |
+  Probability distortion is a systematic bias applied when the judgment is formed: people combine prior and evidence additively in log-odds space, as Bayes prescribes, but with the wrong weights. The posterior log-odds equal alpha times the prior log-odds plus beta times the log likelihood ratio. alpha < 1 is base-rate neglect (the prior is underweighted), beta < 1 is conservatism (the evidence is underweighted) and beta > 1 is overreaction; alpha = beta = 1 recovers Bayes. Because the distortion is a deterministic transformation, the same stimulus always yields the same central judgment; trial-to-trial variability is a separate, constant response noise in log-odds space (sigma), plus a lapse rate epsilon. The theory therefore predicts that mean distortion and response variability are unrelated: changing how noisy responses are does not change their average, and the average is a fixed linear function of prior and evidence log-odds.
+predict: |
+  def predict(parameters, stimulus, history):
+      # See bayes_noise.yaml for the stimulus / output contract.
+      from scipy.special import ndtr
+      K = 101
+      scalar = np.ndim(stimulus["prior"]) == 0
+      prior = np.clip(np.atleast_1d(np.asarray(stimulus["prior"], dtype=float)), 1e-6, 1 - 1e-6)
+      llr = np.atleast_1d(np.asarray(stimulus["log_lr"], dtype=float))
+      alpha = float(parameters["alpha"])
+      beta = float(parameters["beta"])
+      mu = alpha * (np.log(prior) - np.log1p(-prior)) + beta * llr
+
+      edges = np.clip((np.arange(K + 1) - 0.5) / (K - 1), 0.0, 1.0)
+      with np.errstate(divide="ignore"):
+          z_edges = np.log(edges) - np.log1p(-edges)
+      sigma = float(parameters["sigma"])
+      probs = np.diff(ndtr((z_edges[None, :] - mu[:, None]) / sigma), axis=1)
+
+      eps = float(parameters["epsilon"])
+      probs = (1.0 - eps) * probs + eps / K
+      probs = probs / probs.sum(axis=1, keepdims=True)
+      return probs[0] if scalar else probs
+policy: |
+  def policy(probabilities):
+      probabilities = probabilities / probabilities.sum()
+      return int(np.random.choice(len(probabilities), p=probabilities))
+parameters:
+  alpha: "[0.0, 3.0]"      # weight on prior log-odds (1 = Bayes; < 1 = base-rate neglect)
+  beta: "[0.0, 3.0]"       # weight on evidence log LR (1 = Bayes; < 1 = conservatism)
+  sigma: "[0.05, 5.0]"     # response noise in log-odds units
+  epsilon: "[0.0, 0.6]"    # lapse rate
