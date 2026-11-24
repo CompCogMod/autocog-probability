@@ -138,6 +138,51 @@ There are two modes:
   - **Not saved:** no metric for it got written, so the design was never scored.
 - **Reasoning effort "high":** the OpenRouter key ran out of credit on the first call.
 
+## 2026-11-24: Which studies does each theory win, and why?
+
+We compared the studies each theory wins with (a) the paper that proposed the theory and (b) the design features of the studies. The features were computed from `data/processed/all_datasets.csv.gz` and the parameters from `fits.csv`.
+
+**No theory wins the studies from its own paper.** Two of them swap datasets.
+
+| Theory | Proposed in | Its own paper's studies | Where it wins |
+|---|---|---|---|
+| `weak_strong_evidence` | Augenblick, Lazarus & Thaler 2025 | loses all 3 (by .075, .014, .031 NLL/trial) | Enke & Graeber (all 3), Hill exp2, Howe 1–2 |
+| `linear_compression` (cognitive uncertainty) | Enke & Graeber 2023 | loses all 3 (by .12–.39 NLL/trial) | Augenblick 1a |
+| `llo_bias` (Grether-style log-odds regression) | used for the main analysis in Buser, Hill and Tappin | wins Hill exp1 only, and it is tied there | Hill exp1 |
+| `bayesian_sampler` | Zhu, Sanborn & Chater 2020 (not in our data) | — | Augenblick 1b, Howe 3 |
+
+- **Augenblick's model fits Enke & Graeber's data.** Enke & Graeber's evidence spans a wide range of strengths (|log likelihood ratio| up to 11–12), so the curvature γ is identifiable. It comes out at 0.44–0.66 in all three studies: overreaction to weak evidence and underreaction to strong evidence, as Augenblick et al. propose.
+- **Augenblick's data favors noise on the probability scale.** All three Augenblick studies go to models whose noise is Gaussian on the probability scale, or to models that behave like that. Their responses are precise (noise SD 3–7 points) and heavily rounded: 43–44% of answers are multiples of 10 in 1a and 1b.
+- **Buser and Tappin get the log-odds weighting their papers used.** The mean is the one from their papers' regressions, but they prefer *sampling* noise over the log-odds Gaussian noise that an OLS regression on log-odds implies.
+
+**What the winners have in common: the response format matters more than the topic or the paper.**
+
+1. **Real sampling wins: `llo_sampler` with a small number of samples.** It wins Tappin S1, S2 and control, Buser, and Xie & Hayes 3, with N ≈ 8–55 samples.
+   - **Shared feature: many answers of exactly 0% or 100%** (5–27%, compared with under 1% in Augenblick and most of Enke & Graeber). A small-N sampler predicts these as point masses.
+   - **Tappin and Buser also both use subject-reported priors** on political or ego topics.
+   - **Xie & Hayes 1 and 3 use an 11-point scale (0–10).** That coarse discreteness also suits sampling: in expt1 the sampler is within .0002 of the winner.
+2. **Log-odds noise wins: Enke & Graeber, Xie & Hayes 2.**
+   - **Xie & Hayes 2 is the clearest case.** It is the only study whose slider is laid out in odds steps. Its winner, `compression_logodds_noise`, has log-odds noise, so noise shaped like the response scale fits best.
+   - **Enke & Graeber pose many items, each with an objective prior,** and very strong evidence. Log-odds noise handles the far tails of that evidence range.
+3. **Probability-scale noise wins: Augenblick 1a, 1b and 2, Xie & Hayes 1.**
+   - All give objective priors, mostly near 50%, and use precise response formats (boxes that sum to 100, or sliders).
+
+**Wins that aren't evidence for any mechanism:**
+- **Hill exp1 and exp2.** The winning fits give almost zero weight to the evidence (β ≈ 0.005), hit the lower bound on noise (σ = 0.05), and set the lapse rate at 43–50%. That describes "most people repeat their own (often extreme) prior; the rest answer at random." It is about people not updating, not about bias versus sampling.
+- **Howe 1–3.** One trial per subject, the answer is the mean of a reported distribution, and there are only 300–600 trials. The top 3–4 theories are tied to the fourth decimal.
+- **Augenblick 1b's "sampling" win.** The sampler hits the upper bound N = 200, where sampling noise is negligible, so this is probability-Gaussian noise under another name.
+
+**Implication for design.** The noise type seems to track the response format. Two design dimensions follow:
+- Vary the response scale (percent, odds, a coarse 0–10 scale) within subjects on the same items.
+- Measure how answers pile up at 0% and 100% as the posterior moves toward the ends of the scale.
+
+Opus's one surviving design proposal already targets the second.
+
+**Caveats.**
+- Each study is fitted with pooled parameters.
+- Several margins are tiny.
+- Hill's and Howe's wins should be left out of any "who wins where" tally.
+
 ---
 
 ## Open items / next steps
@@ -151,7 +196,8 @@ There are two modes:
 3. **Get Möbius (2022) and Loibl & Leuders (2025)**, convert them, and refit.
 4. **Reproducibility:** add `anthropic` to `pyproject.toml`; for now commands need `--with anthropic`. Optionally make the OpenRouter `max_tokens` (currently 128k) a setting; OpenRouter checks the full limit against the remaining credit before each call.
 5. **Questions for discussion:**
-   - The noise type splits by study. Is the split about the domain (political or ego vs. abstract), about whether the prior is reported or objective, or about how the response is elicited?
+   - The noise type splits by study, and the evidence so far points to how the response is elicited (see the 2026-11-24 analysis). Can we separate that from the domain and from whether the prior is reported or objective?
+   - Should we tighten the parameter bounds, or flag degenerate fits automatically? Examples: the sampler hitting N = 200, and Hill's fits with β ≈ 0 and a lapse rate around 45%.
    - Should we fit hierarchically, with subject-level parameters, instead of pooling each study?
    - Within-subject response variability across repeated identical items is the most direct test of sampling vs. bias. Do any of the existing datasets have repeated items?
 6. **Git:** nothing is pushed. Three local commits are ahead of `origin/main`.
