@@ -202,3 +202,120 @@ def test_rounding_stage_removes_sampler_round_number_advantage():
         gaps[rounding] = (f_n.nll - f_s.nll) / len(df)  # > 0: sampler better
     assert gaps[False] > 0.2
     assert gaps[True] < gaps[False] / 3
+
+
+# --- simulation calibration and the adversarial loop ------------------------
+
+FITS = Path(__file__).resolve().parents[1] / "results" / "probability_updating" / "comparison" / "fits.csv"
+
+
+def test_reporting_stage_rounds_simulated_responses():
+    E = ProbabilityUpdatingExperiment
+    old = (E.REPORT_ROUND10, E.REPORT_ROUND5)
+    try:
+        E.set_reporting(1.0, 0.0)
+        exp = _design()
+        assert {exp._report(b) for b in (3, 4, 6, 96)} == {0, 10, 100}
+        assert {exp._report(5) for _ in range(200)} == {0, 10}  # ties split
+        E.set_reporting(0.0, 1.0)
+        assert [exp._report(b) for b in (2, 3, 97, 100)] == [0, 5, 95, 100]
+        df = _design().simulate(Theory.from_yaml(THEORY_DIR / "llo_bias.yaml"), n_runs=2)
+        assert (df["response_bin"] % 5 == 0).all()
+        assert "rounded to the nearest multiple of 10%" in E.pretty_print_protocol()
+        with pytest.raises(ValueError):
+            E.set_reporting(1.5, 0.0)
+    finally:
+        E.set_reporting(*old)
+    assert "rounded" not in E.pretty_print_header() or old != (0.0, 0.0)
+
+
+@pytest.mark.skipif(not FITS.exists(), reason="comparison fits not built")
+def test_calibrated_theories_narrow_ranges_and_keep_predictions(tmp_path):
+    from src.probability_updating.calibrate import load_fit_params, reporting_rates, write_calibrated_theories
+    params = load_fit_params(FITS)
+    r10, r5 = reporting_rates(params)
+    assert 0 < r10 < 0.5 and 0 < r5 < 0.5
+    written = write_calibrated_theories(THEORY_PATHS, tmp_path, params)
+    assert set(written) == {p.stem for p in THEORY_PATHS}
+    for stem, path in written.items():
+        orig, cal = _load(stem), Theory.from_yaml(path)
+        assert orig.predict_source == cal.predict_source
+        full, narrow = parameter_bounds(orig), parameter_bounds(cal)
+        assert set(full) == set(narrow)
+        for k, (lo, hi) in narrow.items():
+            assert full[k][0] <= lo <= hi <= full[k][1], (stem, k)
+        assert sum(n[1] - n[0] for n in narrow.values()) < sum(f[1] - f[0] for f in full.values())
+        p = _mid_params(cal)
+        assert np.allclose(orig.predict(p, _batch(), None), cal.predict(p, _batch(), None))
+
+
+class _SchemaMock:
+    """LLM stand-in that answers by requested schema: a fixed design or a fixed metric."""
+
+    def __init__(self):
+        import json
+        self.exp = json.dumps({"trial_priors": [0.5, 0.5, 0.2, 0.8], "trial_p_signal_h": [0.6, 0.9, 0.7, 0.3],
+                               "trial_p_signal_not_h": [0.4, 0.1, 0.3, 0.7], "trial_n_signals": [1, 1, 1, 1],
+                               "rationale": "near-50% cells separate sampling from constant log-odds noise"})
+        self.metric = json.dumps({"metric": "def metric(data):\n    d = data[data['prior'] == 0.5]\n"
+                                            "    return float(d['response'].std())",
+                                  "rationale": "response SD where the posterior is near 50%"})
+        self.calls = 0
+
+    def chat(self, messages, system, response_schema=None):
+        from src.llm import ChatResult
+        self.calls += 1
+        text = self.exp if response_schema is ProbabilityUpdatingExperiment else self.metric
+        parsed = response_schema.model_validate_json(text) if response_schema else None
+        return ChatResult(text=text, parsed=parsed, usage={})
+
+
+def test_design_only_loop_runs_end_to_end(tmp_path, monkeypatch):
+    import main_probability_updating as mpu
+    monkeypatch.setattr(mpu, "make_client", lambda cfg: _SchemaMock())
+    old = (ProbabilityUpdatingExperiment.REPORT_ROUND10, ProbabilityUpdatingExperiment.REPORT_ROUND5)
+    try:
+        mpu.main(["--design_only", "--n_runs", "10", "--out_path", str(tmp_path), "--llm_model", "mock",
+                  *([] if FITS.exists() else ["--no_calibration"])])
+    finally:
+        ProbabilityUpdatingExperiment.set_reporting(*old)
+    run_dir = next(tmp_path.iterdir())
+    designs = (run_dir / "designs.md").read_text()
+    assert designs.count("## Round 0, proposed by") == 2
+    assert "pi_1" in designs and "pi_2" in designs and "Welch p" in designs
+    if FITS.exists():
+        assert {p.stem for p in (run_dir / "seed_theories").glob("*.yaml")} == {"llo_bias", "llo_sampler"}
+    from src.observation import Observations
+    pool = Observations.load(run_dir / "observations", experiment_class=ProbabilityUpdatingExperiment)
+    assert len(pool) == 1 and len(pool.latest_round) == 2
+
+
+def test_full_loop_collects_ground_truth_before_arbitration(tmp_path, monkeypatch):
+    import main_probability_updating as mpu
+
+    class _Stop(Exception):
+        pass
+
+    class _Arbiter:
+        def arbitrate(self, round_obj, *, pool, workspace):
+            raise _Stop
+
+    monkeypatch.setattr(mpu, "make_client", lambda cfg: _SchemaMock())
+    monkeypatch.setattr(mpu.Arbiter, "from_config", classmethod(lambda cls, **kw: _Arbiter()))
+    monkeypatch.setattr(mpu.Improver, "from_config", classmethod(lambda cls, **kw: None))
+    monkeypatch.setattr(mpu.TheoryGenerator, "from_config", classmethod(lambda cls, **kw: None))
+    old = (ProbabilityUpdatingExperiment.REPORT_ROUND10, ProbabilityUpdatingExperiment.REPORT_ROUND5)
+    try:
+        with pytest.raises(_Stop):
+            mpu.main(["--n_runs", "10", "--out_path", str(tmp_path), "--llm_model", "mock",
+                      *([] if FITS.exists() else ["--no_calibration"])])
+    finally:
+        ProbabilityUpdatingExperiment.set_reporting(*old)
+    from src.observation import Observations
+    run_dir = next(tmp_path.iterdir())
+    assert run_dir.name.startswith("gt_weak_strong_evidence_llo_bias_vs_llo_sampler")
+    pool = Observations.load(run_dir / "observations", experiment_class=ProbabilityUpdatingExperiment)
+    for obs in pool.latest_round.observations:
+        assert obs.real_value is not None
+        assert {p.label for p in obs.predicted_values} == {"pi_1", "pi_2"}
+    assert "ground truth" in (run_dir / "designs.md").read_text()

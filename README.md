@@ -203,6 +203,37 @@ Any theory that follows this contract and declares its parameters as
 `"[lo, hi]"` ranges can be scored, including theories autocog proposes or
 improves.
 
+### Probability updating: designing experiments that separate the theories
+
+`main_probability_updating.py` runs the adversarial autocog loop on this
+domain. Two seed theories (default: `llo_bias`, a decision-time distortion
+with constant log-odds noise, vs. `llo_sampler`, the same distortion reported
+through binomial sampling) each ask the LLM for a design and a metric that
+would tell them apart with `REAL_N_SUBJECTS` people.
+
+Simulations are calibrated on the human fits above (`fits.csv`):
+- Each theory's parameter ranges are narrowed to the 10th–90th percentile of
+  its per-study estimates. The full ranges are fitting bounds and would let
+  every theory predict almost anything.
+- Every simulated response goes through the same round-to-5/10 reporting
+  stage, at the median rates estimated from the human data.
+- The calibrated YAMLs are written to `<run_dir>/seed_theories/`. Use
+  `--no_calibration` for the full ranges and no rounding.
+
+```bash
+# propose designs only (no stand-in subjects); read <run_dir>/designs.md
+uv run python main_probability_updating.py --design_only --llm_provider anthropic --llm_model claude-opus-5-5
+# full loop: a calibrated ground-truth theory stands in for people; arbiter + improver revise theories
+uv run python main_probability_updating.py --n_rounds 3 --ground_truth weak_strong_evidence
+```
+
+Runs go to `results/probability_updating/autocog/<run>/`. Each run has:
+- `designs.md`: every proposed design, its metric, each theory's predicted
+  value, and the Welch p at `REAL_N_SUBJECTS`
+- `observations/`: the evidence pool
+- `rounds/`: prompt logs
+- `leaderboard.md`: full loop only
+
 ## 6. Repository map
 
 ```text

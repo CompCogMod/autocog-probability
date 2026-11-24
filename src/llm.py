@@ -499,6 +499,14 @@ def _temperature_kwarg(model: str, temperature: float) -> dict:
     """
     if model.startswith(_REASONING_PREFIXES):
         return {}
+    # Anthropic models via OpenRouter (`anthropic/claude-opus-5.5`): the same
+    # always-thinking models reject `temperature`, and with OpenRouter's
+    # require_parameters the request 404s ("No endpoints found that can
+    # handle the requested parameters", 2026-11-23).
+    if model.startswith("anthropic/") and model.removeprefix("anthropic/").replace(".", "-").startswith(
+        _ANTHROPIC_NO_SAMPLING_PREFIXES
+    ):
+        return {}
     return {"temperature": temperature}
 
 
@@ -682,14 +690,25 @@ OPENROUTER_TIMEOUT_S = 3600
 OPENROUTER_DEFAULT_REASONING_EFFORT = "max"
 
 
-def openrouter_extra_body(reasoning_effort: str | None) -> dict:
+# Closed-weight vendors serve their own models on OpenRouter and report no
+# quantization, so a `quantizations` filter matches no endpoint (404 "No
+# endpoints found ... quantization: fp8" for anthropic/claude-opus-5.5,
+# 2026-11-23). The fp8 pin only applies to open-weight models.
+OPENROUTER_FIRST_PARTY_VENDORS = ("anthropic/", "openai/", "google/")
+
+
+def openrouter_extra_body(reasoning_effort: str | None, model: str | None = None) -> dict:
     """Request body for OpenRouter at the given effort (None = default).
     Some models cannot finish at `max` — z-ai/glm-5.3 spent 128k reasoning
     tokens on the free-text theory-generation prompt without ever answering
     (three backends, 2026-09-18) but answered at `high` — so the level is a
-    per-run setting (`LLMConfig.reasoning_effort`, CLI --reasoning_effort)."""
+    per-run setting (`LLMConfig.reasoning_effort`, CLI --reasoning_effort).
+    `model` drops the fp8 pin for first-party vendors (see above)."""
+    provider: dict = {"require_parameters": True, "quantizations": ["fp8"]}
+    if model is not None and model.startswith(OPENROUTER_FIRST_PARTY_VENDORS):
+        del provider["quantizations"]
     return {
-        "provider": {"require_parameters": True, "quantizations": ["fp8"]},
+        "provider": provider,
         "reasoning": {
             "effort": reasoning_effort or OPENROUTER_DEFAULT_REASONING_EFFORT
         },
@@ -803,7 +822,7 @@ def make_client(cfg: LLMConfig) -> LLMClient:
             env_var="OPENROUTER_API_KEY",
             base_url=OPENROUTER_BASE_URL,
             hint="https://openrouter.ai/keys",
-            extra_body=openrouter_extra_body(cfg.reasoning_effort),
+            extra_body=openrouter_extra_body(cfg.reasoning_effort, cfg.model),
             max_tokens=OPENROUTER_MAX_OUTPUT_TOKENS,
             timeout=OPENROUTER_TIMEOUT_S,
         )

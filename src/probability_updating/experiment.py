@@ -40,6 +40,14 @@ class ProbabilityUpdatingExperiment(Experiment):
         "that H is true on a 0-100% scale."
     )
     MAX_TRIALS: ClassVar[int] = 60
+    # Shared reporting stage applied to every simulated response, whichever
+    # theory produced it: with probability REPORT_ROUND10 the reported bin is
+    # moved to the nearest multiple of 10, otherwise with probability
+    # REPORT_ROUND5 to the nearest multiple of 5 (ties split at random). This is
+    # the simulation counterpart of `fit.ReportModel`; set it from human fits
+    # with `set_reporting` (0, 0 = off, the default).
+    REPORT_ROUND10: ClassVar[float] = 0.0
+    REPORT_ROUND5: ClassVar[float] = 0.0
 
     output_columns: ClassVar[dict[str, str]] = {
         "subject_id": "simulated or human subject identifier",
@@ -79,6 +87,28 @@ class ProbabilityUpdatingExperiment(Experiment):
     _trials: list[dict[str, float]] = PrivateAttr(default_factory=list)
     _idx: int = PrivateAttr(default=0)
     _n_repeats: int = PrivateAttr(default=1)
+    _rng: Any = PrivateAttr(default_factory=np.random.default_rng)
+
+    @classmethod
+    def set_reporting(cls, round10: float, round5: float) -> None:
+        """Set the shared round-to-10 / round-to-5 rates for simulated subjects."""
+        for name, v in (("round10", round10), ("round5", round5)):
+            if not 0.0 <= v <= 1.0:
+                raise ValueError(f"{name} must be in [0, 1]; got {v!r}")
+        cls.REPORT_ROUND10, cls.REPORT_ROUND5 = float(round10), float(round5)
+
+    @classmethod
+    def _reporting_note(cls) -> str:
+        if cls.REPORT_ROUND10 == 0 and cls.REPORT_ROUND5 == 0:
+            return ""
+        return (
+            f" As in human data, every response then passes through a shared reporting stage "
+            f"that does not depend on the theory: with probability {cls.REPORT_ROUND10:.2f} it is "
+            f"rounded to the nearest multiple of 10%, otherwise with probability "
+            f"{cls.REPORT_ROUND5:.2f} to the nearest multiple of 5%. Theories should not model "
+            "this rounding themselves, and metrics should not rely on exact values that "
+            "rounding would blur."
+        )
 
     def model_post_init(self, _context: Any) -> None:
         n = len(self.trial_priors)
@@ -124,6 +154,7 @@ class ProbabilityUpdatingExperiment(Experiment):
             "about both the mean report and its trial-to-trial variability. Each unique trial "
             f"is repeated K = max(1, {cls.MAX_TRIALS} // n_unique) times per subject in a "
             "fresh random order. There is no feedback."
+            + cls._reporting_note()
         )
 
     @classmethod
@@ -137,6 +168,7 @@ class ProbabilityUpdatingExperiment(Experiment):
             "write it to broadcast. It must return probabilities over the 101 response bins "
             "0%, 1%, ..., 100%: shape (101,) for one trial, (n, 101) for a batch. `history` is "
             "the subject's earlier trials (dict of lists) or None when fitting a batch."
+            + cls._reporting_note()
         )
 
     def pretty_print(self) -> str:
@@ -170,13 +202,28 @@ class ProbabilityUpdatingExperiment(Experiment):
 
     def update(self, response: int) -> None:
         stim = self._trials[self._idx - 1]
-        b = int(np.clip(int(response), 0, N_BINS - 1))
+        b = self._report(int(np.clip(int(response), 0, N_BINS - 1)))
         h = self._history
         h["trial"].append(self._idx - 1)
         for k in ("prior", "p_signal_h", "p_signal_not_h", "n_signals", "log_lr", "bayes"):
             h[k].append(stim[k])
         h["response"].append(b / (N_BINS - 1))
         h["response_bin"].append(b)
+
+    def _report(self, b: int) -> int:
+        """Apply the shared rounding stage to one chosen bin."""
+        r10, r5 = self.REPORT_ROUND10, self.REPORT_ROUND5
+        if r10 == 0 and r5 == 0:
+            return b
+        u = self._rng.random()
+        step = 10 if u < r10 else 5 if u < r10 + (1 - r10) * r5 else 1
+        if step == 1:
+            return b
+        lo = (b // step) * step
+        rem = b - lo
+        if rem * 2 == step:  # exact tie (only possible for step 10): split at random
+            return lo + step * int(self._rng.random() < 0.5)
+        return lo + step if rem * 2 > step else lo
 
     def to_df(self) -> pd.DataFrame:
         return pd.DataFrame(self._history)

@@ -74,6 +74,20 @@ class TestMakeClientOpenRouter:
             "reasoning": {"effort": "max"},
         }
 
+    def test_first_party_models_drop_quantization_pin(self):
+        """Anthropic/OpenAI/Google serve their own models and report no
+        quantization, so an fp8 filter 404s (anthropic/claude-opus-5.5,
+        2026-11-23); open-weight models keep the pin."""
+        body = openrouter_extra_body(None, "anthropic/claude-opus-5.5")
+        assert body["provider"] == {"require_parameters": True}
+        assert openrouter_extra_body(None, "z-ai/glm-5.3") == openrouter_extra_body(None)
+
+    def test_always_thinking_anthropic_models_omit_temperature(self):
+        from src.llm import _temperature_kwarg
+        assert _temperature_kwarg("anthropic/claude-opus-5.5", 0.7) == {}
+        assert _temperature_kwarg("anthropic/claude-sonnet-4.6", 0.7) == {"temperature": 0.7}
+        assert _temperature_kwarg("z-ai/glm-5.3", 0.7) == {"temperature": 0.7}
+
     def test_reasoning_effort_config_overrides_default(self):
         """z-ai/glm-5.3 at effort=max never leaves its thinking block on the
         free-text theory-generation prompt (128k reasoning tokens, empty
