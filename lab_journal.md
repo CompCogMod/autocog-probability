@@ -275,6 +275,53 @@ It scored 0.991, close to π1. Its second attempt kept the code and changed only
 
 **Next:** run more rounds (`--n_rounds 3`, resuming this run) so that π1 vs. π3 get designs that test curvature.
 
+### Rounds 1–3 (same run, resumed)
+
+Note: `--n_rounds` counts *additional* rounds when resuming. `--n_rounds 3` therefore ran rounds 1–3, giving 4 rounds in total, not the 2 more we intended.
+
+**Theory succession.** In each round the loser was replaced:
+
+| Round | Pair | Replaced | New theory |
+|---|---|---|---|
+| 1 | π1 vs π3 | π3 (Weber encoding) | **π4**: partial integration. Answers come from one cue with probability ρ, and output is soft-bounded in log-odds. |
+| 2 | π1 vs π4 | π1 (`llo_bias`) | **π5**: π4's soft bound, without the cue selection, plus stimulus-independent off-task responding: uniform guessing, polarity reversal (100 − R) and "50%" answers. |
+| 3 | π5 vs π4 | π4 | **π6**: sub-additive pooling of congruent cues (a p-norm), shrunk conflict differences, "salient value" answers (95/99/100) for near-certain beliefs, snapping to multiples of 5, and the off-task mixture. 11 parameters. |
+
+**Final arbiter scores:** π6 0.82, π5 0.66, π1 0.58, π3 0.19, π2 0.07, π4 0.00.
+
+**Designs, and how close each theory came to the ground truth:**
+- **Round 1, π1: the right design, the wrong metric.**
+  - The design is the magnitude sweep the arbiter asked for: |LLR| from 0.85 to 4.6 at prior 50%, matched prior-only cells and conflict cells.
+  - But the metric pools the ratio β/α over all magnitudes, so the curvature disappears.
+  - Ground truth 0.67; π1 0.53; π3 0.84.
+- **Round 1, π3: falsified its own theory.** Its variance-coupling metric gave ground truth 0.15 and π1 0.07, against π3's predicted 0.54. That means no Weber-scaled noise in the ground truth.
+- **Rounds 2–3: the designs drift to the lapse component.** They measured:
+  - the rate of answers no route can reach without a lapse;
+  - the off-task mass in single-source cells;
+  - an excess of answers far from the theory's prediction in conflict cells.
+
+  The ground truth matched π1 or π5 on these. They are tests of nuisance structure, not of how prior and evidence are combined.
+
+**Assessment.**
+- **The loop did not recover the ground truth's mechanism.** The true theory uses a power law in |LLR| (γ < 1). The surviving theories approximate that concavity indirectly:
+  - π4–π6 use a soft bound at extreme log-odds;
+  - π6 also pools congruent cues sub-additively.
+
+  Neither is a per-cue power law, and π6 cannot produce overreaction to weak signals.
+- **The surviving theories accumulate machinery the ground truth doesn't have:**
+  - polarity reversals;
+  - "don't know" 50% answers;
+  - salient-value answers;
+  - snapping to multiples of 5, which duplicates the shared rounding stage even though the prompt describes it.
+
+  The scoring has no complexity penalty, so this extra machinery costs nothing.
+- **Why the loop drifts.** The ground truth's calibrated lapse rate ε reaches up to 0.44. Lapses are then a large, easy-to-detect source of differences, and the design LLM goes after them once the noise question is settled.
+
+**Fixes to consider before more full-loop runs:**
+1. **Treat lapses like rounding.** Fix ε at a shared value, or tell the LLM it is a nuisance stage the theories shouldn't model. Narrowing the ground truth's lapse range would also help.
+2. **Penalise complexity** in the arbiter or generator scoring, e.g. by the number of parameters or by cross-validated fit.
+3. **Ask for metrics that keep the design's structure,** e.g. the slope of median log-odds against |LLR| at prior 50% rather than a pooled ratio. Alternatively, let a design carry several metrics.
+
 ---
 
 ## Open items / next steps

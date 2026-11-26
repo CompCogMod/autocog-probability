@@ -1,0 +1,66 @@
+[
+  {
+    "observation_index": 0,
+    "human_value": 0.14004914004914004,
+    "human_variance": 0.0061828676083735415,
+    "model_value": 0.12475822050290135,
+    "model_variance": 0.005846667026948844,
+    "metric_rationale": "In the moderately extreme cells (Bayes posterior 0.95-0.99 or 0.01-0.05: trials 3,4,5,6,11,12) the distorted belief typically sits around 91-98%. I fold responses toward the favoured side and, among responses in the near-extreme window (>=90%), compute the share that are exactly at the endpoint (100% / 0%). Logit-normal noise (advocated) is a smooth distribution in log-odds that can't pile up at the boundary: its mode sits at expit(mu) (e.g. 96-98%), and reaching the 100 bin requires z > logit(0.995)=5.3, so endpoint share stays low (mostly coming from the shared rounding stage). Binomial sampling (competing) puts mass at k=N, and its Gaussian motor smear tau has open outer bin edges, so every bit of smeared mass above 99.5% lands in the 100 bin; its folded near-extreme distribution therefore has its mode AT the endpoint. The conditional ratio (endpoint / all >=90) removes most dependence on alpha/beta and lapse rate (lapses contribute only ~11/101 of their mass to the window), and the shared rounding affects both theories identically. Pooling 30 trials per subject keeps per-subject estimates reasonably stable, with expected values roughly 0.2-0.3 for logit-normal versus ~0.45-0.6 for binomial-sampling."
+  },
+  {
+    "observation_index": 1,
+    "human_value": -1.5040773967762742,
+    "human_variance": 0.40259677257581694,
+    "model_value": -1.504077396776274,
+    "model_variance": 0.4427641017608379,
+    "metric_rationale": "Shape of the variance law, measured within subject as a ratio so that overall noise level (N, tau vs sigma), which overlaps between theories, cancels. For each subject x cell, take absolute deviations of responses from the cell median (robust to the large lapse rates), pool them over cells whose distorted belief is reliably extreme for ANY admissible alpha/beta (prior .95 with no evidence, .95 with LLR +3.89, .05 with LLR -3.89; belief ~0.90-0.998), and over mid-range cells (prior .5 with LLR 0 or +1.10, prior .2 with LLR +2.2; belief ~0.25-0.72). Metric = log((median extreme dev + .01)/(median mid dev + .01)). Logit-normal noise scales as sigma*p(1-p): spread at p~0.95-0.99 collapses to ~4-20% of mid spread (log ratio strongly negative, about -1.5 to -2). Binomial sampling scales as sqrt(p(1-p)/N) and the motor noise tau adds a probability-space floor that does not shrink near the ends, so extreme spread stays ~40-100% of mid spread (log ratio near -0.5 to 0). The +0.01 floor guards against 1-point discretization; the median-based deviations resist lapses and the 5/10% rounding stage affects both theories similarly."
+  },
+  {
+    "observation_index": 2,
+    "human_value": 0.67070755341105,
+    "human_variance": 0.17189522758627868,
+    "model_value": 0.6466887034065144,
+    "model_variance": 0.04583680059567465,
+    "metric_rationale": "Estimates the relative weight of evidence vs. prior (beta/alpha) at matched input magnitudes, using median response log-odds. For each magnitude x in {0.85,1.39,2.2,2.94,4.6}, the evidence-only cell (prior .5, LLR x) gives beta*x, the prior-only cell (prior expit(x), uninformative evidence) gives alpha*x, and conflict cells (prior expit(x), LLR -x) give (alpha-beta)*x, so P-C is a second estimate of the evidence contribution. Metric = (sum E + sum(P-C)) / (sum of matching P). Both theories are additive in log-odds, so this ratio cleanly reads off the relative evidence/prior weight. Advocated theory: weights are fixed with strong conservatism relative to prior use (beta ~0.12-0.88 vs alpha ~0.73-1.04), giving a ratio typically ~0.5-0.6 and conflict cells resolving clearly toward H. Competing theory: both gains come from the same shrinkage law at matched magnitude (k = lambda^2/(lambda^2+(s0+w|x|)^2)), with lambda_e and lambda_p both large relative to encoding sd, so effective weights are near-equal (ratio ~0.8-0.95) and conflict cells sit near 50-65%. Using sums of cell medians across 8 cell pairs (pooled over all trials of a cell) is robust to lapses and rounding, and the ratio is a per-subject quantity with moderate between-subject variance, unlike the previous spread-based metric whose noise swamped the effect."
+  },
+  {
+    "observation_index": 3,
+    "human_value": 0.1515203764597517,
+    "human_variance": 0.19602513946869646,
+    "model_value": 0.2103330366132294,
+    "model_variance": 0.23947357596900545,
+    "metric_rationale": "Variance coupling test, which is different from the earlier mean-based homogeneity contrast that failed. The linear-weighting theory assumes one constant response noise sigma in log-odds space, so trial-to-trial spread should be about the same in every cell. The Weber-noise theory has encoding sd = s0 + w|x| (w>0). Its spread should therefore be smallest when both inputs are near zero: the 50/50 baseline, prior 0.6 alone, and LLR 0.41 alone. Here sd is about sqrt(2)*k*s0, roughly 0.3-0.5 logits. Spread should be clearly larger when an input is 2.2 logits or more: LLR 2.2 alone, prior 0.9 alone, the split 1.1+1.1 cell, and the split 1.95+1.95 cells. Here sd is roughly 0.7-0.9 logits. The near-50% baseline responses under the advocated theory also tend to collapse onto the 50% bin once rounding is applied, which further lowers low-cell spread. Spread is measured robustly to lapses (epsilon up to 0.4) and rounding. Each response logit is taken as a deviation from that subject's own cell median, so between-subject mean differences do not inflate the spread. The median absolute deviation is then pooled over 15 low-magnitude trials and 25 high-magnitude trials. The metric is log(MAD_high / MAD_low), with a small floor to avoid dividing by zero. Predictions: about 0 for the linear theory, whatever alpha, beta or sigma are; clearly positive (about 0.4-0.8) for the Weber-noise theory. It works identically on pooled data or on one subject's 40 trials."
+  },
+  {
+    "observation_index": 4,
+    "human_value": 0.124,
+    "human_variance": 0.0028906666666666664,
+    "model_value": 0.112,
+    "model_variance": 0.004744888888888889,
+    "metric_rationale": "Implausible-zone rate in cells where every component of both theories points clearly one way. I use single-source and congruent cells (plus the 0.6-prior/strong-evidence probe, whose competing prior-only mode is still on the same side). For each cell I count reports in a zone that no integration route, prior-only route or evidence-only route can reach without a lapse:\n- the wrong side of 50% for strong one-directional cells;\n- the opposite extreme for the weak-evidence cells;\n- the far tails (<=10 or >=90) for the 50/50 baseline.\n\nConflict cells and the weak-conflict probes (0.95 with -1.39 or -0.41) are excluded. There the competing theory's evidence-only mode legitimately lands on the far side, and including them would cancel the contrast.\n\nIn these zones, responses come almost only from uniform lapses, plus a small Gaussian-tail contribution from very noisy or low-beta subjects. The two theories place outlying responses differently:\n- The advocated fixed-weight model has no strategy mixture. Every off-pattern human response must be absorbed by a uniform lapse (epsilon 0.05-0.41) and by a wide sigma (up to 1.2) and low beta (down to 0.12). These produce wrong-side reports even in cells where both cues agree or only one is informative.\n- The competing theory explains off-pattern reports mostly through cue-selection modes confined to two-cue conflict cells. It has small lapses (epsilon 0-0.15), sigma at most 1 and beta at least 0.3, so these cells stay clean.\n\nPredicted values: about 0.10-0.13 under the advocated theory versus about 0.03-0.05 under the competing theory. With about 30 eligible trials per subject, the per-subject rate is reasonably tight. The count-based zones use 10%-or-wider margins, so the shared rounding stage barely affects them.\n\nOn human data, a clear excess of wrong-side reports in cells with no cue conflict would support a global lapse/noise account over a conflict-specific mixture."
+  },
+  {
+    "observation_index": 5,
+    "human_value": 0.12,
+    "human_variance": 0.004864,
+    "model_value": 0.1368,
+    "model_variance": 0.0064697600000000015,
+    "metric_rationale": "Several design features cannot separate the theories. Both predict() functions use only log_lr, which is +1.39 regardless of n_signals, so the n-sweeps are effectively replicates. The sharpest remaining difference is lapse behaviour.\n\nThe metric uses only cells where every component of both theories lies firmly on the H side:\n- the prior-only cells at priors .9 and .999 (log-odds about 1.6-7);\n- the congruent cells at prior .8 with LLR +1.39, where the integrated, prior-anchored and evidence-only modes are all positive.\n\nThis gives 25 trials per subject. In these cells a report at or below 40% is essentially impossible under each model's main components. It arises almost only from the uniform lapse, which places 41/101 of its mass in that region.\n\nExpected values differ by lapse range:\n- Competing theory: epsilon spans 0.05-0.41 (mean about 0.23), so the opposite-side fraction is about 0.41*eps, roughly 0.09-0.10.\n- Advocated theory: epsilon spans 0-0.15 (mean about 0.075), so the fraction is about 0.03. It also has saturation: the bound only pulls high responses toward the high 90s and never toward the opposite side.\n\nThe low-beta prior-0.5 cells and the conflict cells are excluded. There, a near-50% center (competing) or a representativeness mode (advocated) could push mass below 40% for reasons other than lapse.\n\nThe metric is a simple proportion, so it is defined per subject. Between-subject variance comes mostly from binomial noise over 25 trials plus epsilon spread. That noise is small relative to the roughly 0.06 gap, which is about t\u22483.5-4 at N=25."
+  },
+  {
+    "observation_index": 6,
+    "human_value": 0.08685714285714285,
+    "human_variance": 0.002904816326530612,
+    "model_value": 0.084,
+    "model_variance": 0.0026256326530612246,
+    "metric_rationale": "Restrict to single-source cells (prior=0.5 or LLR=0: trials 1-7, 35 trials/subject). Here the competing theory has no strategy mixture, so its only off-pattern mass is a small uniform epsilon (<=0.15, mean ~0.075). The advocated theory has a stimulus-independent off-task component lambda (0.1-0.42, mean ~0.26), mostly uniform plus mirror reversals, which land far from the engaged answer. Metric: fraction of responses more than 35 percentage points from the subject's own median for that cell (median of 5 reps is robust to the lapses and absorbs alpha/beta/bound idiosyncrasies). Engaged log-odds noise (sigma<=0.9) rarely produces 35-point deviations, and the 35-point threshold is far wider than any rounding shift. Expected roughly 0.13-0.15 under the advocated theory vs 0.04-0.05 under the competing theory. Per-subject SD is about 0.07 vs 0.04, giving t of about 5 at N=25."
+  },
+  {
+    "observation_index": 7,
+    "human_value": -0.022263018353537833,
+    "human_variance": 0.004757948010651326,
+    "model_value": -0.017516923233780683,
+    "model_variance": 0.004516164540784861,
+    "metric_rationale": "Conflict-specific excess of far-from-core responses, with the stimulus-independent off-task floor cancelled within each subject. In the large-conflict cells (prior 0.9 vs LLR -2.2, prior 0.97 vs -3.48, prior 0.03 vs +3.48), the advocated cue-selection mixture puts a fraction rho of trials at the single-cue anchors, for example near 95% and near 10% when x=3.48. These anchors sit about 2-3 logit units from the subject's integrated core, so they land outside the band within 1.8 logits of the subject's cell median. The competing theory has no such mixture, so its only far mass is the uniform guessing component lambda (plus reversals and tails), and that has the same density per response bin in every cell.\n\nThe metric is built per subject in three steps:\n1. Estimate the per-bin density of far responses from all non-conflict cells: baseline, prior-only, evidence-only and congruent cells, where the advocated theory predicts no anchor mass.\n2. Multiply that density by the width, in bins, of the far region in each conflict cell. This gives the expected uniform-floor mass there.\n3. Subtract that expectation from the observed far fraction in the conflict cells, then average across subjects.\n\nPredictions:\n- Competing: about 0 or slightly negative, because uniform mass cancels exactly. Reversal reports at the mirror of extreme single-source cells inflate the control density slightly.\n- Advocated: about rho*0.7, roughly 0.12-0.15.\n\nRobustness:\n- The 1.8-logit threshold keeps Gaussian core tails small.\n- Wide bin regions and subject-specific medians make the metric robust to 5%/10% rounding and to individual alpha/beta.\n- Subtracting each subject's own floor removes lambda's large between-subject variance, which sank earlier count-based metrics."
+  }
+]

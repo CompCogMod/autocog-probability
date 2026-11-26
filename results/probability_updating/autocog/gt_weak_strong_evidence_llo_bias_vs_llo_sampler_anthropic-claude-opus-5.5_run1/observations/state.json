@@ -96,6 +96,21 @@
               "value": 0.16749256689791872,
               "variance": 0.009055095887219256,
               "label": "pi_3"
+            },
+            {
+              "value": 0.1479634247714048,
+              "variance": 0.007646218919719477,
+              "label": "pi_4"
+            },
+            {
+              "value": 0.15473887814313347,
+              "variance": 0.008868236525820588,
+              "label": "pi_5"
+            },
+            {
+              "value": 0.12355212355212356,
+              "variance": 0.0056304374123265985,
+              "label": "pi_6"
             }
           ],
           "data_path": "data/round_000_obs_00.jsonl"
@@ -195,6 +210,21 @@
               "value": -1.3862943611198895,
               "variance": 0.5245815235601384,
               "label": "pi_3"
+            },
+            {
+              "value": -1.5040773967762737,
+              "variance": 0.3620560495382119,
+              "label": "pi_4"
+            },
+            {
+              "value": -1.0986122886681104,
+              "variance": 0.6022665214686017,
+              "label": "pi_5"
+            },
+            {
+              "value": -1.3862943611198906,
+              "variance": 0.567958537917361,
+              "label": "pi_6"
             }
           ],
           "data_path": "data/round_000_obs_01.jsonl"
@@ -216,6 +246,795 @@
       },
       "next_theory_idx": 2,
       "next_theory_label": "pi_3"
+    },
+    {
+      "observations": [
+        {
+          "experiment": {
+            "rationale": "Goal: separate a fixed linear log-odds mis-weighting with constant noise (advocated) from magnitude-dependent Weber encoding noise with Bayesian shrinkage (competing). Earlier designs compared variance laws on the probability scale at matched means. This design targets two different signatures: whether gain falls as inputs grow, and whether noise depends on the source of the belief. All trials use one draw, so LLR = log(p_h/p_nh).\n\n(1) Linearity sweeps.\n- Evidence-only, prior 0.5: LLR 0, 0.85, 1.39, 2.20, 2.94, 4.60.\n- Prior-only, uninformative evidence 0.5/0.5: priors 0.7, 0.8, 0.9, 0.95, 0.99 (L0 = 0.85 to 4.6).\n- Advocated: median response log-odds is exactly linear in LLR (slope beta) and in L0 (slope alpha), with constant marginal gain. Medians follow expit(beta*LLR) and expit(alpha*L0).\n- Competing: gains k = lambda^2/(lambda^2+(s0+w|x|)^2) fall with magnitude, so the curves are concave and saturate. Increments shrink: 0.95 to 0.99 adds little, and extreme single-source cells stall near 93-97%.\n- Metric: local slope of median log-odds (or of the median-report rank) for the upper half versus the lower half of each sweep. The advocated theory predicts equal slopes; the competing theory predicts the upper-half slope is clearly smaller. Medians at 5-10% resolution in the 60-95% range are robust to rounding.\n\n(2) Source-dependent variability at matched belief.\n- Conflict cells pit a strong prior against equally strong opposing evidence: 0.99 vs 0.01/0.99, 0.95 vs 0.05/0.95, 0.9 vs 0.1/0.9.\n- Advocated: noise is a constant sigma around mu = (alpha - beta)*|x|. A conflict cell's spread should therefore equal that of any single-source cell with the same median. The low-magnitude single-source cells (prior 0.7 or 0.8; LLR 0.85 or 1.39) provide those median-matched comparisons.\n- Competing: conflict cells carry encoding noise from two large components. The predicted log-odds SD is about 1.2 versus about 0.35 for the pure 50/50 cell, and it grows across the three conflict magnitudes.\n- Metric: IQR of reports in each conflict cell divided by the IQR of the median-matched single-source cell. The advocated theory predicts a ratio of about 1, flat across conflict magnitude; the competing theory predicts a ratio well above 1 that increases with magnitude.\n- A further check: under the advocated theory, the conflict-cell median shifts monotonically with magnitude at rate (alpha - beta). Under the competing theory it stays close to the mean-matched value but its variance inflates.\n\n(3) Congruent moderate cell: prior 0.8 with evidence 0.8/0.2. This checks additivity against the two single-source cells (prior 0.8 alone; LLR 1.39 at prior 0.5).\n\nSummary: 15 unique trials, K = 4 repeats each.",
+            "trial_priors": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.7,
+              0.8,
+              0.9,
+              0.95,
+              0.99,
+              0.99,
+              0.95,
+              0.9,
+              0.8
+            ],
+            "trial_p_signal_h": [
+              0.5,
+              0.7,
+              0.8,
+              0.9,
+              0.95,
+              0.99,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.01,
+              0.05,
+              0.1,
+              0.8
+            ],
+            "trial_p_signal_not_h": [
+              0.5,
+              0.3,
+              0.2,
+              0.1,
+              0.05,
+              0.01,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.99,
+              0.95,
+              0.9,
+              0.2
+            ],
+            "trial_n_signals": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    import numpy as np\n    import pandas as pd\n    r = np.clip(data['response'].astype(float).values, 0.01, 0.99)\n    lo = np.log(r) - np.log1p(-r)\n    pr = data['prior'].astype(float).values\n    ll = data['log_lr'].astype(float).values\n    def cm(mask):\n        v = lo[mask]\n        if len(v) == 0:\n            return np.nan\n        return float(np.median(v))\n    num = 0.0\n    den = 0.0\n    for p in [0.7, 0.8, 0.9, 0.95, 0.99]:\n        L = np.log(p / (1 - p))\n        E = cm((np.abs(pr - 0.5) < 1e-3) & (np.abs(ll - L) < 0.05))\n        P = cm((np.abs(pr - p) < 1e-3) & (np.abs(ll) < 0.05))\n        C = cm((np.abs(pr - p) < 1e-3) & (np.abs(ll + L) < 0.05))\n        if np.isnan(P):\n            continue\n        if not np.isnan(E):\n            num += E\n            den += P\n        if not np.isnan(C):\n            num += (P - C)\n            den += P\n    if abs(den) < 1e-6:\n        return 0.0\n    return float(num / den)\n",
+            "rationale": "Estimates the relative weight of evidence vs. prior (beta/alpha) at matched input magnitudes, using median response log-odds. For each magnitude x in {0.85,1.39,2.2,2.94,4.6}, the evidence-only cell (prior .5, LLR x) gives beta*x, the prior-only cell (prior expit(x), uninformative evidence) gives alpha*x, and conflict cells (prior expit(x), LLR -x) give (alpha-beta)*x, so P-C is a second estimate of the evidence contribution. Metric = (sum E + sum(P-C)) / (sum of matching P). Both theories are additive in log-odds, so this ratio cleanly reads off the relative evidence/prior weight. Advocated theory: weights are fixed with strong conservatism relative to prior use (beta ~0.12-0.88 vs alpha ~0.73-1.04), giving a ratio typically ~0.5-0.6 and conflict cells resolving clearly toward H. Competing theory: both gains come from the same shrinkage law at matched magnitude (k = lambda^2/(lambda^2+(s0+w|x|)^2)), with lambda_e and lambda_p both large relative to encoding sd, so effective weights are near-equal (ratio ~0.8-0.95) and conflict cells sit near 50-65%. Using sums of cell medians across 8 cell pairs (pooled over all trials of a cell) is robust to lapses and rounding, and the ratio is a per-subject quantity with moderate between-subject variance, unlike the previous spread-based metric whose noise swamped the effect."
+          },
+          "proposer_theory": {
+            "description": "Probability distortion is a systematic bias applied when the judgment is formed: people combine prior and evidence additively in log-odds space, as Bayes prescribes, but with the wrong weights. The posterior log-odds equal alpha times the prior log-odds plus beta times the log likelihood ratio. alpha < 1 is base-rate neglect (the prior is underweighted), beta < 1 is conservatism (the evidence is underweighted) and beta > 1 is overreaction; alpha = beta = 1 recovers Bayes. Because the distortion is a deterministic transformation, the same stimulus always yields the same central judgment; trial-to-trial variability is a separate, constant response noise in log-odds space (sigma), plus a lapse rate epsilon. The theory therefore predicts that mean distortion and response variability are unrelated: changing how noisy responses are does not change their average, and the average is a fixed linear function of prior and evidence log-odds.\n",
+            "predict_source": "def predict(parameters, stimulus, history):\n    # See bayes_noise.yaml for the stimulus / output contract.\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float))\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    mu = alpha * (np.log(prior) - np.log1p(-prior)) + beta * llr\n\n    edges = np.clip((np.arange(K + 1) - 0.5) / (K - 1), 0.0, 1.0)\n    with np.errstate(divide=\"ignore\"):\n        z_edges = np.log(edges) - np.log1p(-edges)\n    sigma = float(parameters[\"sigma\"])\n    probs = np.diff(ndtr((z_edges[None, :] - mu[:, None]) / sigma), axis=1)\n\n    eps = float(parameters[\"epsilon\"])\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probabilities):\n    probabilities = probabilities / probabilities.sum()\n    return int(np.random.choice(len(probabilities), p=probabilities))\n",
+            "parameters": {
+              "alpha": "[0.7325, 1.037]",
+              "beta": "[0.1248, 0.8789]",
+              "sigma": "[0.1955, 1.207]",
+              "epsilon": "[0.04915, 0.4149]"
+            },
+            "rationale": null
+          },
+          "proposer_label": "pi_1",
+          "real_value": 0.67070755341105,
+          "real_variance": 0.17189522758627868,
+          "predicted_values": [
+            {
+              "value": 0.5296663373957379,
+              "variance": 0.1446493178867541,
+              "label": "pi_1"
+            },
+            {
+              "value": 0.8425067672997608,
+              "variance": 0.0441532987177534,
+              "label": "pi_3"
+            },
+            {
+              "value": 0.5472436878224793,
+              "variance": 0.07835074984236738,
+              "label": "pi_2"
+            },
+            {
+              "value": 0.7687032342139385,
+              "variance": 0.07637918608621896,
+              "label": "pi_4"
+            },
+            {
+              "value": 0.7787405358069638,
+              "variance": 0.07686730819923894,
+              "label": "pi_5"
+            },
+            {
+              "value": 0.7027426032564463,
+              "variance": 0.06756995349558827,
+              "label": "pi_6"
+            }
+          ],
+          "data_path": "data/round_001_obs_00.jsonl"
+        },
+        {
+          "experiment": {
+            "rationale": "Goal: test two signatures of Weber-scaled encoding noise with Bayesian shrinkage that earlier designs did not isolate. Both are framed so the linear model makes alpha/beta-free predictions. All trials use one draw (n=1), so LLR = log(p_h/p_nh).\n\n(1) Split-versus-single-source contrast. This is the main new test. The same total log-odds is delivered either from one source or split equally between prior and evidence.\n- Total 2.20: prior 0.9 alone, or LLR 2.20 alone (0.9/0.1), versus split prior 0.75 plus evidence 0.75/0.25 (1.10+1.10).\n- Total 3.89: prior 0.98 alone, or LLR 3.89 alone (0.98/0.02), versus split prior 0.875 plus evidence 0.875/0.125 (1.95+1.95). A mirrored low split cell (0.125 with 0.125/0.875) is added for reliability.\n- Linear model: split logit = (alpha+beta)*x, and the single-source cells give alpha*2x and beta*2x. So the split cell's median logit must equal exactly the average of the two single-source logits, whatever alpha and beta are.\n- Advocated model: gains fall with magnitude, so splitting yields more total weight than one large source. The split cell should exceed the average. With typical parameters (s0=.3, w=.2, lambda_p=2, lambda_e=1.5) the excess is about 0.15 logits at total 2.2 and about 0.55 logits at total 3.9 (about 96.6% versus 94%). The excess should grow with total magnitude.\n\n(2) Gain at small versus large magnitude.\n- Sweeps: evidence-only LLR 0.41, 1.10, 2.20, 3.89 (prior 0.5), and prior-only 0.6, 0.75, 0.9, 0.98.\n- Advocated: near-Bayesian gain for weak inputs (k about 0.9-0.95), falling to about 0.65-0.75 for strong inputs. The ratio of response logit to input should decline across each sweep.\n- Linear model: the ratio is constant (beta and alpha respectively).\n- Metric: per-cell mean response logit divided by input. This is computed on means over repeats and subjects, which is less sensitive to 5/10% rounding than medians.\n\n(3) Variance coupling.\n- Advocated: log-odds SD grows with input magnitude, and it is larger in split and single-source high-magnitude cells than in the pure 0.5/0.5 baseline.\n- Linear model: constant log-odds sigma.\n- Across subjects, the advocated model predicts that people with larger response variability in the 1.1-2.2 cells (where rounding hurts least) show stronger gain decline and stronger conservatism. The linear model predicts no correlation between variability and alpha/beta.\n\nTwelve unique trials give K=5 repeats each.",
+            "trial_priors": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.6,
+              0.75,
+              0.9,
+              0.98,
+              0.75,
+              0.875,
+              0.125,
+              0.5
+            ],
+            "trial_p_signal_h": [
+              0.6,
+              0.75,
+              0.9,
+              0.98,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.75,
+              0.875,
+              0.125,
+              0.5
+            ],
+            "trial_p_signal_not_h": [
+              0.4,
+              0.25,
+              0.1,
+              0.02,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.25,
+              0.125,
+              0.875,
+              0.5
+            ],
+            "trial_n_signals": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    import numpy as np\n    import pandas as pd\n    d = data.copy()\n    r = np.clip(d['response'].astype(float).values, 0.005, 0.995)\n    d['lg'] = np.log(r) - np.log1p(-r)\n    d['pk'] = np.round(d['prior'].astype(float).values, 3)\n    d['lk'] = np.round(d['log_lr'].astype(float).values, 2)\n    d['dev'] = d['lg'] - d.groupby(['subject_id', 'pk', 'lk'])['lg'].transform('median')\n    pr = d['prior'].astype(float).values\n    ll = d['log_lr'].astype(float).values\n    def sel(p, l):\n        return (np.abs(pr - p) < 0.01) & (np.abs(ll - l) < 0.05)\n    low = sel(0.5, 0.405) | sel(0.6, 0.0) | sel(0.5, 0.0)\n    high = sel(0.5, 2.197) | sel(0.9, 0.0) | sel(0.75, 1.099) | sel(0.875, 1.946) | sel(0.125, -1.946)\n    dv = np.abs(d['dev'].values)\n    if low.sum() == 0 or high.sum() == 0:\n        return float('nan')\n    mad_low = float(np.median(dv[low])) + 0.05\n    mad_high = float(np.median(dv[high])) + 0.05\n    return float(np.log(mad_high / mad_low))\n",
+            "rationale": "Variance coupling test, which is different from the earlier mean-based homogeneity contrast that failed. The linear-weighting theory assumes one constant response noise sigma in log-odds space, so trial-to-trial spread should be about the same in every cell. The Weber-noise theory has encoding sd = s0 + w|x| (w>0). Its spread should therefore be smallest when both inputs are near zero: the 50/50 baseline, prior 0.6 alone, and LLR 0.41 alone. Here sd is about sqrt(2)*k*s0, roughly 0.3-0.5 logits. Spread should be clearly larger when an input is 2.2 logits or more: LLR 2.2 alone, prior 0.9 alone, the split 1.1+1.1 cell, and the split 1.95+1.95 cells. Here sd is roughly 0.7-0.9 logits. The near-50% baseline responses under the advocated theory also tend to collapse onto the 50% bin once rounding is applied, which further lowers low-cell spread. Spread is measured robustly to lapses (epsilon up to 0.4) and rounding. Each response logit is taken as a deviation from that subject's own cell median, so between-subject mean differences do not inflate the spread. The median absolute deviation is then pooled over 15 low-magnitude trials and 25 high-magnitude trials. The metric is log(MAD_high / MAD_low), with a small floor to avoid dividing by zero. Predictions: about 0 for the linear theory, whatever alpha, beta or sigma are; clearly positive (about 0.4-0.8) for the Weber-noise theory. It works identically on pooled data or on one subject's 40 trials."
+          },
+          "proposer_theory": {
+            "description": "Noisy log-odds encoding with Weber-scaled noise and Bayesian shrinkage. Distortion in probability updating comes from noise, not from fixed mis-weighting.\n\nEncoding:\n- The stated prior is converted to log-odds, L0 = logit(prior). The evidence is represented by its log likelihood ratio, LLR.\n- Each quantity x_i is encoded as a Gaussian sample m_i ~ N(x_i, sd_i^2).\n- The noise sd has a constant part plus a part proportional to magnitude (scalar, Weber-like variability): sd_i = s0 + w*|x_i|, with w strictly positive.\n\nDecoding:\n- The subject does not know the true magnitudes, so it decodes each measurement with Bayesian shrinkage toward 0.\n- The decoder uses a zero-mean Gaussian prior over log-odds, with spread lambda_p for priors and lambda_e for evidence.\n- Each decoded value is k_i*m_i, with gain k_i = lambda_i^2 / (lambda_i^2 + sd_i^2).\n- The decoded posterior log-odds is the sum k_p*m_p + k_e*m_e.\n\nReport:\n- The subject reports expit of the decoded log-odds, after a small extra response noise in log-odds (sigma_r).\n- With lapse probability epsilon, the report is random.\n\nPredictions:\n- Effective weights alpha_eff = k_p and beta_eff = k_e fall as stimulus magnitude grows. Response log-odds are therefore a concave, saturating function of |prior log-odds| and |LLR|, with more conservatism and base-rate neglect for extreme inputs.\n- Single-source extreme cells (prior 0.99 or LLR 4.6 alone) are pulled to roughly 93\u201397%, not 99\u2013100%. This keeps exact-100 reports rare.\n- Congruent cells still add up to very high, tightly clustered beliefs.\n- Log-odds variability grows with |L0| and |LLR|, so conflict cells are more variable than the pure 50/50 cell.\n- Mean distortion and variability are coupled: subjects or cells with more encoding noise show more conservatism and more base-rate neglect.",
+            "predict_source": "def predict(parameters, stimulus, history):\n    import numpy as np\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float)) * np.ones_like(prior)\n    L0 = np.log(prior) - np.log1p(-prior)\n\n    s0 = float(parameters[\"s0\"])\n    w = float(parameters[\"w\"])\n    lam_p = float(parameters[\"lambda_p\"])\n    lam_e = float(parameters[\"lambda_e\"])\n    sig_r = float(parameters[\"sigma_r\"])\n    eps = float(parameters[\"epsilon\"])\n\n    # Weber-scaled encoding noise in log-odds space\n    sd_p = s0 + w * np.abs(L0)\n    sd_e = s0 + w * np.abs(llr)\n    # Bayesian shrinkage gains (zero-mean Gaussian prior over log-odds)\n    k_p = lam_p ** 2 / (lam_p ** 2 + sd_p ** 2)\n    k_e = lam_e ** 2 / (lam_e ** 2 + sd_e ** 2)\n\n    mu = k_p * L0 + k_e * llr\n    sd = np.sqrt((k_p * sd_p) ** 2 + (k_e * sd_e) ** 2 + sig_r ** 2)\n    sd = np.maximum(sd, 1e-3)\n\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    z_edges = np.empty(K + 1)\n    z_edges[0] = -np.inf\n    z_edges[-1] = np.inf\n    inner = edges[1:-1]\n    z_edges[1:-1] = np.log(inner) - np.log1p(-inner)\n\n    cdf = ndtr((z_edges[None, :] - mu[:, None]) / sd[:, None])\n    probs = np.diff(cdf, axis=1)\n    probs = np.clip(probs, 0.0, None)\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probs):\n    import numpy as np\n    p = np.asarray(probs, dtype=np.float64)\n    p = np.clip(p, 0.0, None)\n    p /= p.sum()\n    return int(np.random.choice(len(p), p=p))\n",
+            "parameters": {
+              "s0": "[0.1, 0.5]",
+              "w": "[0.05, 0.35]",
+              "lambda_p": "[1.3, 2.7]",
+              "lambda_e": "[0.7, 2.5]",
+              "sigma_r": "[0.05, 0.4]",
+              "epsilon": "[0.04, 0.35]"
+            },
+            "rationale": "This is a minimal-diff edit: the predict and policy code are verbatim, and only the parameter ranges change. That follows the critic's diagnosis that the problem is calibration, not mechanism.\n\nWhy the old ranges failed Experiment 1:\n- With lambda_p up to 8, k_p was about 1 even at |L0| = 4.6. The prior-0.99 cell therefore had mean log-odds near 4.5.\n- The Weber term widened its spread to about 1.4, so the right tail crossed logit(0.995) about 5.3 too often.\n- Combined with the shared rounding stage (values of 95 or more become 100 on 13% of trials), this gave 0.27 exact-100 reports in the window versus 0.14 observed.\n\nWhat the new ranges do:\n- lambda_p is now [1.3, 2.7] and lambda_e [0.7, 2.5]. Shrinkage therefore bites at large magnitudes: k_p is about 0.72 at |L0| = 4.6 but about 0.92 at |L0| = 1.39, and k_e is about 0.6 at LLR 4.6 but about 0.9 at LLR 1.1.\n- w is now [0.05, 0.35] (strictly positive) and s0 [0.1, 0.5]. Decoded spread in extreme cells then sits around 0.8\u20131.0 log-odds, not 1.4.\n- In the Experiment 1 window cells, means fall to about 2.8\u20133.6 log-odds. A back-of-envelope calculation including rounding gives an exact-100 share of about 0.14\u20130.16.\n\nWhy I did not adopt the critic's other suggestions:\n- **Posterior-level shrinkage:** I deliberately did not add it. The same estimate shows it would pull the highly congruent Experiment 2 extreme cells (0.95 with 3.89, Bayes about 0.999) down to about 97%. That would inflate their deviations and overshoot the Experiment 2 metric (about -1.1 versus the observed -1.5).\n- **Very large w (up to 0.9):** rejected for the same reason.\n- **Epsilon floor of 0.01:** not adopted. The uniform lapse contributes an end-share of only about 0.1, which helps Experiment 1. It also slightly raises extreme-cell deviations, which helps Experiment 2.\n\nExpected effect on Experiment 2:\n- Congruent cells still sum to about 5 log-odds with tight probability-scale deviations (about 0.005\u20130.01).\n- The single-source prior-0.95 cell sits at about 92%, with moderate spread.\n- Mid cells keep deviations of about 0.08\u20130.13.\n- Together these give a predicted metric of about -1.55, close to the observed -1.50.\n\nThe theory's distinctive predictions are retained: saturating weights, magnitude-scaled variance, and coupling between noise and conservatism."
+          },
+          "proposer_label": "pi_3",
+          "real_value": 0.1515203764597517,
+          "real_variance": 0.19602513946869646,
+          "predicted_values": [
+            {
+              "value": 0.5447043887167684,
+              "variance": 0.23203539770502488,
+              "label": "pi_3"
+            },
+            {
+              "value": 0.07092968644876249,
+              "variance": 0.24730089097046234,
+              "label": "pi_1"
+            },
+            {
+              "value": 0.5458648254457865,
+              "variance": 0.283908997716857,
+              "label": "pi_2"
+            },
+            {
+              "value": 0.12542080651889717,
+              "variance": 0.25223723448540275,
+              "label": "pi_4"
+            },
+            {
+              "value": 0.21015590549339977,
+              "variance": 0.2815657095328862,
+              "label": "pi_5"
+            },
+            {
+              "value": 0.06312789846237442,
+              "variance": 0.30211837294788835,
+              "label": "pi_6"
+            }
+          ],
+          "data_path": "data/round_001_obs_01.jsonl"
+        }
+      ],
+      "next_theory": {
+        "description": "Stochastic partial integration with a soft-bounded response range.\n\nOn average, people combine prior and evidence additively in log-odds space with distorted weights: L = alpha*logit(prior) + beta*LLR. Here alpha<1 is base-rate neglect and beta<1 is conservatism. Integration is not guaranteed on every trial.\n\n(a) Integration rule. When both cues are informative (prior differs from 50% and LLR differs from 0), the subject fails to integrate with probability rho and answers from a single cue:\n- with probability q it anchors on the prior (alpha*L0);\n- with probability 1-q it goes by the evidence alone (beta*LLR), a representativeness shortcut.\nWhen only one cue is informative, the single-cue route coincides with integration, so single-source cells show no extra spread.\n\n(b) Soft-bounded output. The chosen internal log-odds passes through a saturating transform: L' = sign(L)*Delta*tanh((|L|/Delta)^kappa)^(1/kappa). With kappa>1 the transform is nearly linear up to about |L|\u2248Delta and then saturates sharply at Delta. It therefore compresses only beyond about the 97-99.9% level, and it never makes encoding gains depend on magnitude in the moderate range. kappa=1 recovers the plain tanh bound.\n\n(c) Noise. Constant Gaussian response noise sigma is added in log-odds around the bounded value, plus a uniform lapse epsilon.\n\nPredictions:\n- Single-source cells behave like a fixed-weight model, with compression only at the far extremes.\n- Two-cue cells carry extra, possibly bimodal spread from the strategy mixture.\n- Congruent medians are sub-additive.\n- Exact-100 reports arise mostly via rounding of reports in the high 90s.",
+        "predict_source": "def predict(parameters, stimulus, history):\n    import numpy as np\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float)) * np.ones_like(prior)\n    L0 = np.log(prior) - np.log1p(-prior)\n\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    rho = float(parameters[\"rho\"])\n    q = float(parameters[\"q\"])\n    Delta = max(float(parameters[\"Delta\"]), 1e-3)\n    kappa = max(float(parameters[\"kappa\"]), 1e-3)\n    sigma = max(float(parameters[\"sigma\"]), 1e-3)\n    eps = float(parameters[\"epsilon\"])\n\n    both = ((np.abs(L0) > 1e-6) & (np.abs(llr) > 1e-6)).astype(float)\n    w_int = 1.0 - rho * both\n    w_p = rho * q * both\n    w_e = rho * (1.0 - q) * both\n\n    mu_int = alpha * L0 + beta * llr\n    mu_p = alpha * L0\n    mu_e = beta * llr\n\n    def bound(x):\n        u = np.abs(x) / Delta\n        return np.sign(x) * Delta * np.tanh(u ** kappa) ** (1.0 / kappa)\n\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    z_edges = np.empty(K + 1)\n    z_edges[0] = -np.inf\n    z_edges[-1] = np.inf\n    inner = edges[1:-1]\n    z_edges[1:-1] = np.log(inner) - np.log1p(-inner)\n\n    def bins(mu):\n        m = bound(mu)\n        cdf = ndtr((z_edges[None, :] - m[:, None]) / sigma)\n        return np.clip(np.diff(cdf, axis=1), 0.0, None)\n\n    probs = (w_int[:, None] * bins(mu_int)\n             + w_p[:, None] * bins(mu_p)\n             + w_e[:, None] * bins(mu_e))\n    probs = probs / np.maximum(probs.sum(axis=1, keepdims=True), 1e-300)\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+        "policy_source": "def policy(probs):\n    import numpy as np\n    p = np.asarray(probs, dtype=np.float64)\n    p = np.clip(p, 0.0, None)\n    p /= p.sum()\n    return int(np.random.choice(len(p), p=p))\n",
+        "parameters": {
+          "alpha": "[0.6, 1.1]",
+          "beta": "[0.3, 1.0]",
+          "rho": "[0.0, 0.4]",
+          "q": "[0.3, 0.8]",
+          "Delta": "[3.5, 7.0]",
+          "kappa": "[1.5, 4.0]",
+          "sigma": "[0.3, 1.0]",
+          "epsilon": "[0.0, 0.15]"
+        },
+        "rationale": "This is a minimal-diff edit of the accepted iteration-1 candidate (loss 0.3965). The integration core, the prior-only/evidence-only mixture gated to two-cue cells, the noise and the lapse are all unchanged. Only the output bound and two parameter ranges change, following the critic's diagnosis that all three remaining misses (Experiments 1, 2 and 3) come from a bound that is too tight.\n\nWhy the bound needed a new shape, not just a larger Delta:\n- With plain tanh, compression starts immediately: x - x^3/(3*Delta^2).\n- Even at Delta=6, the prior-0.99 cell (alpha*L0 \u2248 4.1) is pulled to \u22483.6, i.e. about 97%.\n- That still starves Experiment 1 of 100-bin reports and inflates the Experiment 3 ratio through the compressed P/E denominators.\n\nThe edits:\n1. **Softer transform.** The bound is now Delta*tanh((|L|/Delta)^kappa)^(1/kappa), the critic's option 2. With kappa \u2248 2-4 it is essentially linear up to |L| \u2248 Delta and saturates sharply only beyond. It nests the old tanh at kappa=1.\n2. **Delta range moved to [3.5, 7].** The cap then sits above about 97%, so it bites only above the 98-99% level.\n3. **Lower beta bound reduced to 0.3.** Experiment 3's ratio is roughly beta/alpha when compression is negligible, so this allows the observed 0.67 without relying on compression.\n\nExpected effects:\n- **Experiment 1.** Moderately extreme cells (Bayes 0.95-0.996) return to centres near 94-98%. Rounding then produces exact-100 rates near pi_1's (about 0.14-0.17), instead of the previous 0.046.\n- **Experiment 2.** Extreme-cell centres return to the region where constant log-odds noise yields tight probability spread, so the ratio moves back toward -1.5.\n- **Experiment 3.** P and E are no longer disproportionately compressed relative to P\u2212C, so the ratio falls from 0.85 toward beta/alpha \u2248 0.67.\n- **Experiment 4.** Its gain comes from the untouched two-cue mixture, so it should be preserved (about 0.18 vs 0.15 observed)."
+      },
+      "next_theory_idx": 2,
+      "next_theory_label": "pi_4"
+    },
+    {
+      "observations": [
+        {
+          "experiment": {
+            "rationale": "Goal: test whether two-cue trials are integrated deterministically on every trial, as the advocated fixed-weight log-odds model with constant noise claims, or through a stochastic mixture of strategies. All trials use one draw (n=1), so LLR = log(p_h/p_nh). The design mixes single-source anchor cells with two-cue cells. Unlike earlier designs, it tests mixture structure and additivity rather than variance-versus-level laws.\n\n(A) Single-source anchors. These cells calibrate alpha, beta and sigma without any mixture contribution.\n- Baseline: 0.5 with 0.5/0.5.\n- Evidence only at prior 0.5: LLR +/-1.39 and +2.94.\n- Prior only: 0.8 and 0.95.\n\n(B) Congruent cells: 0.8 with 0.8/0.2, 0.95 with 0.95/0.05, and 0.05 with 0.05/0.95.\n- Advocated: the median logit equals exactly the single-source prior logit plus the single-source evidence logit (strict additivity). Spread equals the baseline sigma.\n- Competing: medians are sub-additive. There is also a heavy tail or second mode at the single-cue values (about 80% or about 95%). The 0.95 congruent cell is further pulled down by the soft bound.\n\n(C) Conflict cells: 0.95 with 0.05/0.95, 0.05 with 0.95/0.05, 0.8 with 0.2/0.8, 0.95 with 0.2/0.8, and 0.8 with 0.05/0.95.\n- Advocated: one unimodal logit-normal distribution centred at (alpha*L0 - beta*|LLR|), with the same IQR as median-matched single-source cells. The proportion of reports on the far side of 50% is predictable from sigma alone.\n- Competing: responses mix a prior-anchored mode (near the prior-only cell's median) and an evidence-only mode (near the evidence-only cell's median, on the opposite side of 50%). This yields inflated IQR, bimodality, and an excess of opposite-side reports.\n\n(D) Near-single-cue probes: 0.95 with weak evidence 0.4/0.6, and 0.6 with strong evidence 0.95/0.05. These are the sharpest dissociation because both cues count as informative, which triggers the competing mixture.\n- Advocated: each distribution is a slightly shifted copy of its single-source partner (prior 0.95 alone; LLR 2.94 at prior 0.5), with identical spread.\n- Competing: an extra mode appears far from the partner. In the first probe, rho*(1-q) of responses fall near 40-45% (the evidence-only answer). In the second, rho*q of responses fall near 60% (the prior-only answer).\n\nMetrics, using 10%-wide bins so they are robust to rounding:\n1. IQR in each two-cue cell divided by the IQR of its single-source partner. Advocated predicts about 1; competing predicts more than 1.\n2. The fraction of two-cue responses falling within \u00b110% of the single-cue predictions taken from the anchor cells, compared against the logit-normal expectation.\n3. Additivity residuals in the congruent cells, computed from the empirical single-source medians. Advocated predicts 0; competing predicts negative residuals.\n4. Within-subject consistency: the advocated model says a subject's spread is the same in single-source and two-cue cells.\n\nFifteen unique trials give K=4 repeats each.",
+            "trial_priors": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.8,
+              0.95,
+              0.8,
+              0.95,
+              0.05,
+              0.95,
+              0.05,
+              0.8,
+              0.95,
+              0.8,
+              0.95,
+              0.6
+            ],
+            "trial_p_signal_h": [
+              0.5,
+              0.8,
+              0.2,
+              0.95,
+              0.5,
+              0.5,
+              0.8,
+              0.95,
+              0.05,
+              0.05,
+              0.95,
+              0.2,
+              0.2,
+              0.05,
+              0.4,
+              0.95
+            ],
+            "trial_p_signal_not_h": [
+              0.5,
+              0.2,
+              0.8,
+              0.05,
+              0.5,
+              0.5,
+              0.2,
+              0.05,
+              0.95,
+              0.95,
+              0.05,
+              0.8,
+              0.8,
+              0.95,
+              0.6,
+              0.05
+            ],
+            "trial_n_signals": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "import numpy as np\nimport pandas as pd\n\ndef metric(data: pd.DataFrame) -> float:\n    p = data['prior'].values.astype(float)\n    l = data['log_lr'].values.astype(float)\n    r = data['response_bin'].values.astype(float)\n    L4 = np.log(4.0)\n    L19 = np.log(19.0)\n    def cell(pv, lv):\n        return (np.abs(p - pv) < 1e-3) & (np.abs(l - lv) < 0.05)\n    specs = [\n        (0.5, 0.0, (r <= 10) | (r >= 90)),\n        (0.5, L4, r <= 20),\n        (0.5, -L4, r >= 80),\n        (0.5, L19, r < 50),\n        (0.8, 0.0, r < 50),\n        (0.95, 0.0, r < 50),\n        (0.8, L4, r < 50),\n        (0.95, L19, r < 50),\n        (0.05, -L19, r > 50),\n        (0.6, L19, r < 50),\n    ]\n    hits = 0.0\n    total = 0.0\n    for pv, lv, zone in specs:\n        m = cell(pv, lv)\n        total += float(m.sum())\n        hits += float((m & zone).sum())\n    if total <= 0:\n        return float('nan')\n    return float(hits / total)\n",
+            "rationale": "Implausible-zone rate in cells where every component of both theories points clearly one way. I use single-source and congruent cells (plus the 0.6-prior/strong-evidence probe, whose competing prior-only mode is still on the same side). For each cell I count reports in a zone that no integration route, prior-only route or evidence-only route can reach without a lapse:\n- the wrong side of 50% for strong one-directional cells;\n- the opposite extreme for the weak-evidence cells;\n- the far tails (<=10 or >=90) for the 50/50 baseline.\n\nConflict cells and the weak-conflict probes (0.95 with -1.39 or -0.41) are excluded. There the competing theory's evidence-only mode legitimately lands on the far side, and including them would cancel the contrast.\n\nIn these zones, responses come almost only from uniform lapses, plus a small Gaussian-tail contribution from very noisy or low-beta subjects. The two theories place outlying responses differently:\n- The advocated fixed-weight model has no strategy mixture. Every off-pattern human response must be absorbed by a uniform lapse (epsilon 0.05-0.41) and by a wide sigma (up to 1.2) and low beta (down to 0.12). These produce wrong-side reports even in cells where both cues agree or only one is informative.\n- The competing theory explains off-pattern reports mostly through cue-selection modes confined to two-cue conflict cells. It has small lapses (epsilon 0-0.15), sigma at most 1 and beta at least 0.3, so these cells stay clean.\n\nPredicted values: about 0.10-0.13 under the advocated theory versus about 0.03-0.05 under the competing theory. With about 30 eligible trials per subject, the per-subject rate is reasonably tight. The count-based zones use 10%-or-wider margins, so the shared rounding stage barely affects them.\n\nOn human data, a clear excess of wrong-side reports in cells with no cue conflict would support a global lapse/noise account over a conflict-specific mixture."
+          },
+          "proposer_theory": {
+            "description": "Probability distortion is a systematic bias applied when the judgment is formed: people combine prior and evidence additively in log-odds space, as Bayes prescribes, but with the wrong weights. The posterior log-odds equal alpha times the prior log-odds plus beta times the log likelihood ratio. alpha < 1 is base-rate neglect (the prior is underweighted), beta < 1 is conservatism (the evidence is underweighted) and beta > 1 is overreaction; alpha = beta = 1 recovers Bayes. Because the distortion is a deterministic transformation, the same stimulus always yields the same central judgment; trial-to-trial variability is a separate, constant response noise in log-odds space (sigma), plus a lapse rate epsilon. The theory therefore predicts that mean distortion and response variability are unrelated: changing how noisy responses are does not change their average, and the average is a fixed linear function of prior and evidence log-odds.\n",
+            "predict_source": "def predict(parameters, stimulus, history):\n    # See bayes_noise.yaml for the stimulus / output contract.\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float))\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    mu = alpha * (np.log(prior) - np.log1p(-prior)) + beta * llr\n\n    edges = np.clip((np.arange(K + 1) - 0.5) / (K - 1), 0.0, 1.0)\n    with np.errstate(divide=\"ignore\"):\n        z_edges = np.log(edges) - np.log1p(-edges)\n    sigma = float(parameters[\"sigma\"])\n    probs = np.diff(ndtr((z_edges[None, :] - mu[:, None]) / sigma), axis=1)\n\n    eps = float(parameters[\"epsilon\"])\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probabilities):\n    probabilities = probabilities / probabilities.sum()\n    return int(np.random.choice(len(probabilities), p=probabilities))\n",
+            "parameters": {
+              "alpha": "[0.7325, 1.037]",
+              "beta": "[0.1248, 0.8789]",
+              "sigma": "[0.1955, 1.207]",
+              "epsilon": "[0.04915, 0.4149]"
+            },
+            "rationale": null
+          },
+          "proposer_label": "pi_1",
+          "real_value": 0.124,
+          "real_variance": 0.0028906666666666664,
+          "predicted_values": [
+            {
+              "value": 0.122,
+              "variance": 0.006071555555555556,
+              "label": "pi_1"
+            },
+            {
+              "value": 0.04466666666666667,
+              "variance": 0.0015382222222222223,
+              "label": "pi_4"
+            },
+            {
+              "value": 0.10133333333333333,
+              "variance": 0.0040426666666666675,
+              "label": "pi_2"
+            },
+            {
+              "value": 0.09533333333333334,
+              "variance": 0.004089333333333333,
+              "label": "pi_3"
+            },
+            {
+              "value": 0.11266666666666666,
+              "variance": 0.0038173333333333336,
+              "label": "pi_5"
+            },
+            {
+              "value": 0.10933333333333334,
+              "variance": 0.004535111111111111,
+              "label": "pi_6"
+            }
+          ],
+          "data_path": "data/round_002_obs_00.jsonl"
+        },
+        {
+          "experiment": {
+            "rationale": "Goal: separate two accounts. The advocated account is stochastic partial integration with a saturating response bound. The competing account is fixed-weight linear log-odds integration with constant Gaussian noise. Earlier designs [0-4] used single draws with |LLR| no larger than 4.6 and |L0| no larger than 4.6. This design uses multi-draw evidence, where I assume LLR = n*log(ph/pnh), and a 0.999 prior to push inputs beyond the soft bound Delta (3.5-7). It also tracks how the strategy mixture's modes separate as evidence grows.\n\nBlock A: saturation of single-source cells.\n- Evidence-only sweep at prior 0.5 with draws of 0.8/0.2, n = 1, 2, 4 and 6 (LLR 1.39, 2.77, 5.55, 8.32).\n- A mirrored low cell: 0.2/0.8 with n = 6.\n- Prior-only cells at 0.9 and 0.999 (L0 2.2 and 6.9).\n- Linear theory: median logit = beta*LLR (or alpha*L0), with no ceiling. The share of top-end reports keeps rising steeply from n=4 to n=6. For example, with beta=.6 and sigma=.6, P(report>99.5%) goes from about 0 to about 30%.\n- Advocated theory: nearly linear up to about Delta, then a plateau. Medians at n=4, n=6 and prior 0.999 converge on a common ceiling near expit(Delta), and the top-tail share grows little.\n- Rounding-robust metrics: the share of reports at or above 97.5%, and median rank, compared across n=4 vs n=6 and prior .9 vs .999. Under linear theory the n=1 to n=2 slope predicts the n=4 to n=6 slope; under the advocated theory the upper slope collapses.\n\nBlock B: mode separation at a fixed prior of 0.8 with congruent evidence of increasing strength (0.8/0.2, n = 1, 3, 6).\n- Linear theory: one logit-normal distribution that shifts upward and tightens toward 100.\n- Advocated theory: the integrated mode saturates near the ceiling. A prior-anchored mode stays fixed at expit(alpha*1.39), about 75-80%, carrying a constant mass of rho*q. A third component, the evidence-only mode at beta*LLR, has no fixed location but is absorbed into the ceiling.\n- Predicted signature: a lower tail that becomes more separated, and more conspicuous, as evidence strengthens, with constant mass. Its fraction is unchanged with n, unlike constant-sigma noise, which predicts this tail mass vanishes with n.\n- Metric: the fraction of reports at or below 85% in each cell.\n\nBlock C: extreme conflict cells with multi-draw evidence.\n- Cells: 0.999 vs 0.2/0.8 with n=3; 0.2 vs 0.8/0.2 with n=4; 0.01 vs 0.8/0.2 with n=2.\n- Linear theory: a single unimodal hump at alpha*L0 + beta*LLR. For the 0.999 cell this is about 97%. The mass beyond 50% on the opposite side is predictable from sigma fitted in Block A.\n- Advocated theory: bimodal. For the 0.999 cell, one mode is pinned at the bound (about 99%) and another is near expit(-beta*4.16), about 5-20%. The 0.01 cell has a mode near 80-90%, and the 0.2 cell has a mode near 20%.\n- Metrics: the opposite-side fraction, a bimodality coefficient, and IQR relative to single-source cells with matched medians. All are computed with 10%-wide bins.\n\nSummary: 12 unique trials, giving K=5 repeats each. Both theories' noise and weight parameters are pinned by Blocks A and B. The critical out-of-sample tests are the ceiling plateau, a lower-tail mass that does not shrink with evidence, and bimodality in extreme conflicts.",
+            "trial_priors": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.9,
+              0.999,
+              0.8,
+              0.8,
+              0.8,
+              0.999,
+              0.2
+            ],
+            "trial_p_signal_h": [
+              0.8,
+              0.8,
+              0.8,
+              0.8,
+              0.2,
+              0.5,
+              0.5,
+              0.8,
+              0.8,
+              0.8,
+              0.2,
+              0.8
+            ],
+            "trial_p_signal_not_h": [
+              0.2,
+              0.2,
+              0.2,
+              0.2,
+              0.8,
+              0.5,
+              0.5,
+              0.2,
+              0.2,
+              0.2,
+              0.8,
+              0.2
+            ],
+            "trial_n_signals": [
+              1,
+              2,
+              4,
+              6,
+              6,
+              1,
+              1,
+              1,
+              3,
+              6,
+              3,
+              4
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    import numpy as np\n    d = data\n    mask = (d['prior'] >= 0.79) & (d['log_lr'] >= -1e-9)\n    sub = d.loc[mask]\n    if len(sub) == 0:\n        return float('nan')\n    return float(np.mean(sub['response_bin'].values <= 40))\n",
+            "rationale": "Several design features cannot separate the theories. Both predict() functions use only log_lr, which is +1.39 regardless of n_signals, so the n-sweeps are effectively replicates. The sharpest remaining difference is lapse behaviour.\n\nThe metric uses only cells where every component of both theories lies firmly on the H side:\n- the prior-only cells at priors .9 and .999 (log-odds about 1.6-7);\n- the congruent cells at prior .8 with LLR +1.39, where the integrated, prior-anchored and evidence-only modes are all positive.\n\nThis gives 25 trials per subject. In these cells a report at or below 40% is essentially impossible under each model's main components. It arises almost only from the uniform lapse, which places 41/101 of its mass in that region.\n\nExpected values differ by lapse range:\n- Competing theory: epsilon spans 0.05-0.41 (mean about 0.23), so the opposite-side fraction is about 0.41*eps, roughly 0.09-0.10.\n- Advocated theory: epsilon spans 0-0.15 (mean about 0.075), so the fraction is about 0.03. It also has saturation: the bound only pulls high responses toward the high 90s and never toward the opposite side.\n\nThe low-beta prior-0.5 cells and the conflict cells are excluded. There, a near-50% center (competing) or a representativeness mode (advocated) could push mass below 40% for reasons other than lapse.\n\nThe metric is a simple proportion, so it is defined per subject. Between-subject variance comes mostly from binomial noise over 25 trials plus epsilon spread. That noise is small relative to the roughly 0.06 gap, which is about t\u22483.5-4 at N=25."
+          },
+          "proposer_theory": {
+            "description": "Stochastic partial integration with a soft-bounded response range.\n\nOn average, people combine prior and evidence additively in log-odds space with distorted weights: L = alpha*logit(prior) + beta*LLR. Here alpha<1 is base-rate neglect and beta<1 is conservatism. Integration is not guaranteed on every trial.\n\n(a) Integration rule. When both cues are informative (prior differs from 50% and LLR differs from 0), the subject fails to integrate with probability rho and answers from a single cue:\n- with probability q it anchors on the prior (alpha*L0);\n- with probability 1-q it goes by the evidence alone (beta*LLR), a representativeness shortcut.\nWhen only one cue is informative, the single-cue route coincides with integration, so single-source cells show no extra spread.\n\n(b) Soft-bounded output. The chosen internal log-odds passes through a saturating transform: L' = sign(L)*Delta*tanh((|L|/Delta)^kappa)^(1/kappa). With kappa>1 the transform is nearly linear up to about |L|\u2248Delta and then saturates sharply at Delta. It therefore compresses only beyond about the 97-99.9% level, and it never makes encoding gains depend on magnitude in the moderate range. kappa=1 recovers the plain tanh bound.\n\n(c) Noise. Constant Gaussian response noise sigma is added in log-odds around the bounded value, plus a uniform lapse epsilon.\n\nPredictions:\n- Single-source cells behave like a fixed-weight model, with compression only at the far extremes.\n- Two-cue cells carry extra, possibly bimodal spread from the strategy mixture.\n- Congruent medians are sub-additive.\n- Exact-100 reports arise mostly via rounding of reports in the high 90s.",
+            "predict_source": "def predict(parameters, stimulus, history):\n    import numpy as np\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float)) * np.ones_like(prior)\n    L0 = np.log(prior) - np.log1p(-prior)\n\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    rho = float(parameters[\"rho\"])\n    q = float(parameters[\"q\"])\n    Delta = max(float(parameters[\"Delta\"]), 1e-3)\n    kappa = max(float(parameters[\"kappa\"]), 1e-3)\n    sigma = max(float(parameters[\"sigma\"]), 1e-3)\n    eps = float(parameters[\"epsilon\"])\n\n    both = ((np.abs(L0) > 1e-6) & (np.abs(llr) > 1e-6)).astype(float)\n    w_int = 1.0 - rho * both\n    w_p = rho * q * both\n    w_e = rho * (1.0 - q) * both\n\n    mu_int = alpha * L0 + beta * llr\n    mu_p = alpha * L0\n    mu_e = beta * llr\n\n    def bound(x):\n        u = np.abs(x) / Delta\n        return np.sign(x) * Delta * np.tanh(u ** kappa) ** (1.0 / kappa)\n\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    z_edges = np.empty(K + 1)\n    z_edges[0] = -np.inf\n    z_edges[-1] = np.inf\n    inner = edges[1:-1]\n    z_edges[1:-1] = np.log(inner) - np.log1p(-inner)\n\n    def bins(mu):\n        m = bound(mu)\n        cdf = ndtr((z_edges[None, :] - m[:, None]) / sigma)\n        return np.clip(np.diff(cdf, axis=1), 0.0, None)\n\n    probs = (w_int[:, None] * bins(mu_int)\n             + w_p[:, None] * bins(mu_p)\n             + w_e[:, None] * bins(mu_e))\n    probs = probs / np.maximum(probs.sum(axis=1, keepdims=True), 1e-300)\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probs):\n    import numpy as np\n    p = np.asarray(probs, dtype=np.float64)\n    p = np.clip(p, 0.0, None)\n    p /= p.sum()\n    return int(np.random.choice(len(p), p=p))\n",
+            "parameters": {
+              "alpha": "[0.6, 1.1]",
+              "beta": "[0.3, 1.0]",
+              "rho": "[0.0, 0.4]",
+              "q": "[0.3, 0.8]",
+              "Delta": "[3.5, 7.0]",
+              "kappa": "[1.5, 4.0]",
+              "sigma": "[0.3, 1.0]",
+              "epsilon": "[0.0, 0.15]"
+            },
+            "rationale": "This is a minimal-diff edit of the accepted iteration-1 candidate (loss 0.3965). The integration core, the prior-only/evidence-only mixture gated to two-cue cells, the noise and the lapse are all unchanged. Only the output bound and two parameter ranges change, following the critic's diagnosis that all three remaining misses (Experiments 1, 2 and 3) come from a bound that is too tight.\n\nWhy the bound needed a new shape, not just a larger Delta:\n- With plain tanh, compression starts immediately: x - x^3/(3*Delta^2).\n- Even at Delta=6, the prior-0.99 cell (alpha*L0 \u2248 4.1) is pulled to \u22483.6, i.e. about 97%.\n- That still starves Experiment 1 of 100-bin reports and inflates the Experiment 3 ratio through the compressed P/E denominators.\n\nThe edits:\n1. **Softer transform.** The bound is now Delta*tanh((|L|/Delta)^kappa)^(1/kappa), the critic's option 2. With kappa \u2248 2-4 it is essentially linear up to |L| \u2248 Delta and saturates sharply only beyond. It nests the old tanh at kappa=1.\n2. **Delta range moved to [3.5, 7].** The cap then sits above about 97%, so it bites only above the 98-99% level.\n3. **Lower beta bound reduced to 0.3.** Experiment 3's ratio is roughly beta/alpha when compression is negligible, so this allows the observed 0.67 without relying on compression.\n\nExpected effects:\n- **Experiment 1.** Moderately extreme cells (Bayes 0.95-0.996) return to centres near 94-98%. Rounding then produces exact-100 rates near pi_1's (about 0.14-0.17), instead of the previous 0.046.\n- **Experiment 2.** Extreme-cell centres return to the region where constant log-odds noise yields tight probability spread, so the ratio moves back toward -1.5.\n- **Experiment 3.** P and E are no longer disproportionately compressed relative to P\u2212C, so the ratio falls from 0.85 toward beta/alpha \u2248 0.67.\n- **Experiment 4.** Its gain comes from the untouched two-cue mixture, so it should be preserved (about 0.18 vs 0.15 observed)."
+          },
+          "proposer_label": "pi_4",
+          "real_value": 0.12,
+          "real_variance": 0.004864,
+          "predicted_values": [
+            {
+              "value": 0.0408,
+              "variance": 0.00220736,
+              "label": "pi_4"
+            },
+            {
+              "value": 0.1016,
+              "variance": 0.00487744,
+              "label": "pi_1"
+            },
+            {
+              "value": 0.1032,
+              "variance": 0.006405759999999999,
+              "label": "pi_2"
+            },
+            {
+              "value": 0.0872,
+              "variance": 0.00516416,
+              "label": "pi_3"
+            },
+            {
+              "value": 0.12,
+              "variance": 0.006464000000000001,
+              "label": "pi_5"
+            },
+            {
+              "value": 0.1168,
+              "variance": 0.00408576,
+              "label": "pi_6"
+            }
+          ],
+          "data_path": "data/round_002_obs_01.jsonl"
+        }
+      ],
+      "next_theory": {
+        "description": "Bounded deterministic integration plus heterogeneous off-task responding.\n\n(1) Engaged integration is deterministic. Every engaged trial combines prior and evidence additively in log-odds with distorted weights: L = alpha*logit(prior) + beta*LLR. alpha<1 is base-rate neglect and beta<1 is conservatism. There is no cue-selection mixture, so conflict cells are unimodal in the engaged state.\n\n(2) The output is softly bounded. The integrated value passes through L' = sign(L)*Delta*tanh((|L|/Delta)^kappa)^(1/kappa), with kappa>1 and Delta about 3.5\u20135.5. The bound keeps engaged reports off the exact endpoints, compresses raw-scale spread near the extremes, and leaves logit-scale variability roughly constant.\n\n(3) Response noise is constant Gaussian noise sigma in log-odds around the bounded value.\n\n(4) A non-engaged component has subject-specific total probability lambda (about 0.1\u20130.42). Its probability does not depend on the stimulus. It is dominated by uniform guessing over 0\u2013100. It has two minor parts:\n- a polarity-reversal lapse that reports the mirror value 100\u2212R, i.e. P(not-H);\n- a rare 50% 'don't know' report.\nOff-pattern mass is therefore equal in single-source, congruent and conflict cells.",
+        "predict_source": "def predict(parameters, stimulus, history):\n    import numpy as np\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float)) * np.ones_like(prior)\n    L0 = np.log(prior) - np.log1p(-prior)\n\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    Delta = max(float(parameters[\"Delta\"]), 1e-3)\n    kappa = max(float(parameters[\"kappa\"]), 1e-3)\n    sigma = max(float(parameters[\"sigma\"]), 1e-3)\n    lam = float(np.clip(parameters[\"lam\"], 0.0, 1.0))\n    f_rev = float(np.clip(parameters[\"f_rev\"], 0.0, 1.0))\n    f_half = float(np.clip(parameters[\"f_half\"], 0.0, 1.0))\n    tot = f_rev + f_half\n    if tot > 1.0:\n        f_rev /= tot\n        f_half /= tot\n    f_uni = max(0.0, 1.0 - f_rev - f_half)\n\n    L = alpha * L0 + beta * llr\n    u = np.abs(L) / Delta\n    Lb = np.sign(L) * Delta * np.tanh(u ** kappa) ** (1.0 / kappa)\n\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    z_edges = np.empty(K + 1)\n    z_edges[0] = -np.inf\n    z_edges[-1] = np.inf\n    inner = edges[1:-1]\n    z_edges[1:-1] = np.log(inner) - np.log1p(-inner)\n\n    cdf = ndtr((z_edges[None, :] - Lb[:, None]) / sigma)\n    eng = np.clip(np.diff(cdf, axis=1), 0.0, None)\n    eng = eng / np.maximum(eng.sum(axis=1, keepdims=True), 1e-300)\n\n    rev = eng[:, ::-1]\n    spike = np.zeros(K)\n    spike[50] = 1.0\n    uni = np.full(K, 1.0 / K)\n\n    probs = (1.0 - lam) * eng + lam * (f_uni * uni[None, :] + f_rev * rev + f_half * spike[None, :])\n    probs = np.clip(probs, 0.0, None)\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+        "policy_source": "def policy(probs):\n    import numpy as np\n    p = np.asarray(probs, dtype=np.float64)\n    p = np.clip(p, 0.0, None)\n    p /= p.sum()\n    return int(np.random.choice(len(p), p=p))\n",
+        "parameters": {
+          "alpha": "[0.7, 1.1]",
+          "beta": "[0.35, 1.0]",
+          "Delta": "[3.5, 5.5]",
+          "kappa": "[1.5, 4.0]",
+          "sigma": "[0.3, 0.9]",
+          "lam": "[0.1, 0.42]",
+          "f_rev": "[0.0, 0.15]",
+          "f_half": "[0.0, 0.05]"
+        },
+        "rationale": "Minimal diff: the code is unchanged; only parameter ranges move. The mechanism stays exactly as the arbiter prescribed: deterministic additive integration, the soft bound, constant logit noise, and a stimulus-independent structured lapse.\n\nExp 4 (0.44 vs 0.15) is the dominant residual. The lapse sub-components differ in how symmetric they are across the Exp 4 cells:\n- **Reversal and 50%-spike lapses.** In the low cells (prior 0.5 or 0.6, LLR \u2248 0), they land at or near the cell median, so they add almost no logit deviation. In the high cells (|L| \u2248 2), they are huge outliers. They therefore raise high-cell MAD relative to low-cell MAD.\n- **Uniform guessing.** It produces large logit deviations in both cell types (about 76% vs 87% of draws), so it is nearly MAD-neutral. pi_1, whose lapse was purely uniform at mean about 0.23, got 0.07 on Exp 4.\n\nThe critic suggested raising f_rev. I deliberately do not follow that advice. Per unit lapse mass, uniform guessing buys about 0.41 of Exp 6 tail mass for about 0.1 of Exp 4 asymmetry. Reversal buys 1.0 for about 1.0. Uniform is therefore about 4\u00d7 more efficient. So:\n- f_half shrinks to [0, 0.05].\n- f_rev shrinks to [0, 0.15]. A small reversal share is kept, as the arbiter requires.\n- lam shifts to [0.1, 0.42], mean \u2248 0.26.\n\nThe expected effects on the tail metrics are:\n- **Exp 6** is about lam*(0.9*0.41 + 0.075) \u2248 0.115, against an observed 0.12.\n- **Exp 5** is about 0.12\u20130.13.\n- **Exp 1** should drop: uniform mass dilutes the exact-100 share, since it contributes only 1/11 of the folded \u226590 window at bin 100.\n\nFollowing the critic, Delta narrows to [3.5, 5.5] and sigma to [0.3, 0.9]. This keeps engaged reports in the near-certain single-cue cells off bin 100, which lowers Exp 1 toward 0.14. It also strengthens raw-scale compression at the extremes, moving Exp 2 toward \u22121.5.\n\nExp 3's weight ratio is driven by engaged medians, and its alpha and beta ranges are unchanged, so it should be preserved."
+      },
+      "next_theory_idx": 1,
+      "next_theory_label": "pi_5"
+    },
+    {
+      "observations": [
+        {
+          "experiment": {
+            "rationale": "Goal: test where off-pattern responses come from and where they land. The advocated theory says one stimulus-independent off-task component of mass lambda, mostly uniform, plus a polarity-reversal mirror (100-R) and a small 50% spike. It should appear with equal mass in every cell type, and its non-uniform parts sit at the mirror of the engaged answer. The competing theory says off-pattern mass beyond a small uniform epsilon arises only in two-cue cells. There it is a strategy mixture located at the single-cue answers: prior-only alpha*L0 and evidence-only beta*LLR. Earlier designs studied variance laws, gain linearity, additivity, saturation and conflict bimodality. They did not separate mirror-located from single-cue-located extra mass, nor test equal off-pattern mass across cell types. LLR is assumed to be n*log(ph/pnh).\n\nBlock A, single-source cells:\n- Baseline 0.5 with 0.5/0.5.\n- Strong evidence at prior 0.5: 0.9/0.1 and 0.1/0.9, n=2, LLR +/-4.39. Engaged answer is about 95% or 5%.\n- Prior-only cells: 0.95 and 0.05.\n- Anchors: prior-only 0.6, and weak evidence-only 0.6/0.4 at prior 0.5. These place the single-cue modes empirically.\n- Competing prediction: single-source cells contain only logit-normal mass plus uniform epsilon of at most 0.15. There is no excess in the mirror band.\n- Advocated prediction: the mirror band (e.g. 0-15% when the engaged answer is about 95%) holds lambda*f_rev above the uniform floor. The total off-pattern mass can reach 0.3-0.4.\n\nBlock B, two-cue cells where the single-cue modes sit far from both the integrated answer and its mirror:\n- 0.6 with 0.9/0.1, n=2 (integrated about 97%, prior-only mode about 59%, mirror about 3%).\n- 0.4 with 0.9/0.1, n=2 (integrated about 94%, prior-only mode about 41%).\n- 0.6 with 0.1/0.9, n=2 (integrated about 6%, prior-only mode about 59%, mirror about 94%).\n- 0.95 with weak evidence 0.6/0.4 (integrated about 95%, evidence-only mode about 57%).\n- 0.75 with 0.75/0.25 (integrated about 85%, single-cue modes about 68-73%, mirror about 15%).\n- Competing prediction: a bump of mass rho*q or rho*(1-q) in the 35-65% band, absent from the matched single-source cells.\n- Advocated prediction: no bump, with off-pattern mass identical to the single-source cells.\n\nRounding-robust metrics (10%-wide bins):\n1. Mass in the mirror band minus the uniform-floor estimate, in single-source versus two-cue cells.\n2. Mass in the single-cue band (located from the anchor cells) in two-cue cells, relative to the same band in matched single-source cells.\n3. Total off-pattern mass (more than about 2 engaged-sigma from the median) by cell type. Advocated predicts equality; competing predicts two-cue greater than single-source.\n4. Per-subject correlation of off-pattern mass across cell types. Advocated predicts a high, near-identity relation, because lambda is a subject trait.\n\nThere are 12 unique trials with K=5 repeats each.",
+            "trial_priors": [
+              0.5,
+              0.5,
+              0.5,
+              0.95,
+              0.05,
+              0.6,
+              0.5,
+              0.6,
+              0.4,
+              0.6,
+              0.95,
+              0.75
+            ],
+            "trial_p_signal_h": [
+              0.5,
+              0.9,
+              0.1,
+              0.5,
+              0.5,
+              0.5,
+              0.6,
+              0.9,
+              0.9,
+              0.1,
+              0.6,
+              0.75
+            ],
+            "trial_p_signal_not_h": [
+              0.5,
+              0.1,
+              0.9,
+              0.5,
+              0.5,
+              0.5,
+              0.4,
+              0.1,
+              0.1,
+              0.9,
+              0.4,
+              0.25
+            ],
+            "trial_n_signals": [
+              1,
+              2,
+              2,
+              1,
+              1,
+              1,
+              1,
+              2,
+              2,
+              2,
+              1,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    import numpy as np\n    import pandas as pd\n    d = data.copy()\n    d['pk'] = d['prior'].astype(float).round(3)\n    d['lk'] = d['log_lr'].astype(float).round(2)\n    single = (d['lk'].abs() < 1e-6) | ((d['pk'] - 0.5).abs() < 1e-6)\n    d = d[single]\n    if len(d) == 0:\n        return float('nan')\n    r = d['response_bin'].astype(float)\n    med = d.groupby(['subject_id', 'pk', 'lk'])['response_bin'].transform('median').astype(float)\n    far = (np.abs(r - med) > 35.0).astype(float)\n    return float(far.mean())\n",
+            "rationale": "Restrict to single-source cells (prior=0.5 or LLR=0: trials 1-7, 35 trials/subject). Here the competing theory has no strategy mixture, so its only off-pattern mass is a small uniform epsilon (<=0.15, mean ~0.075). The advocated theory has a stimulus-independent off-task component lambda (0.1-0.42, mean ~0.26), mostly uniform plus mirror reversals, which land far from the engaged answer. Metric: fraction of responses more than 35 percentage points from the subject's own median for that cell (median of 5 reps is robust to the lapses and absorbs alpha/beta/bound idiosyncrasies). Engaged log-odds noise (sigma<=0.9) rarely produces 35-point deviations, and the 35-point threshold is far wider than any rounding shift. Expected roughly 0.13-0.15 under the advocated theory vs 0.04-0.05 under the competing theory. Per-subject SD is about 0.07 vs 0.04, giving t of about 5 at N=25."
+          },
+          "proposer_theory": {
+            "description": "Bounded deterministic integration plus heterogeneous off-task responding.\n\n(1) Engaged integration is deterministic. Every engaged trial combines prior and evidence additively in log-odds with distorted weights: L = alpha*logit(prior) + beta*LLR. alpha<1 is base-rate neglect and beta<1 is conservatism. There is no cue-selection mixture, so conflict cells are unimodal in the engaged state.\n\n(2) The output is softly bounded. The integrated value passes through L' = sign(L)*Delta*tanh((|L|/Delta)^kappa)^(1/kappa), with kappa>1 and Delta about 3.5\u20135.5. The bound keeps engaged reports off the exact endpoints, compresses raw-scale spread near the extremes, and leaves logit-scale variability roughly constant.\n\n(3) Response noise is constant Gaussian noise sigma in log-odds around the bounded value.\n\n(4) A non-engaged component has subject-specific total probability lambda (about 0.1\u20130.42). Its probability does not depend on the stimulus. It is dominated by uniform guessing over 0\u2013100. It has two minor parts:\n- a polarity-reversal lapse that reports the mirror value 100\u2212R, i.e. P(not-H);\n- a rare 50% 'don't know' report.\nOff-pattern mass is therefore equal in single-source, congruent and conflict cells.",
+            "predict_source": "def predict(parameters, stimulus, history):\n    import numpy as np\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float)) * np.ones_like(prior)\n    L0 = np.log(prior) - np.log1p(-prior)\n\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    Delta = max(float(parameters[\"Delta\"]), 1e-3)\n    kappa = max(float(parameters[\"kappa\"]), 1e-3)\n    sigma = max(float(parameters[\"sigma\"]), 1e-3)\n    lam = float(np.clip(parameters[\"lam\"], 0.0, 1.0))\n    f_rev = float(np.clip(parameters[\"f_rev\"], 0.0, 1.0))\n    f_half = float(np.clip(parameters[\"f_half\"], 0.0, 1.0))\n    tot = f_rev + f_half\n    if tot > 1.0:\n        f_rev /= tot\n        f_half /= tot\n    f_uni = max(0.0, 1.0 - f_rev - f_half)\n\n    L = alpha * L0 + beta * llr\n    u = np.abs(L) / Delta\n    Lb = np.sign(L) * Delta * np.tanh(u ** kappa) ** (1.0 / kappa)\n\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    z_edges = np.empty(K + 1)\n    z_edges[0] = -np.inf\n    z_edges[-1] = np.inf\n    inner = edges[1:-1]\n    z_edges[1:-1] = np.log(inner) - np.log1p(-inner)\n\n    cdf = ndtr((z_edges[None, :] - Lb[:, None]) / sigma)\n    eng = np.clip(np.diff(cdf, axis=1), 0.0, None)\n    eng = eng / np.maximum(eng.sum(axis=1, keepdims=True), 1e-300)\n\n    rev = eng[:, ::-1]\n    spike = np.zeros(K)\n    spike[50] = 1.0\n    uni = np.full(K, 1.0 / K)\n\n    probs = (1.0 - lam) * eng + lam * (f_uni * uni[None, :] + f_rev * rev + f_half * spike[None, :])\n    probs = np.clip(probs, 0.0, None)\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probs):\n    import numpy as np\n    p = np.asarray(probs, dtype=np.float64)\n    p = np.clip(p, 0.0, None)\n    p /= p.sum()\n    return int(np.random.choice(len(p), p=p))\n",
+            "parameters": {
+              "alpha": "[0.7, 1.1]",
+              "beta": "[0.35, 1.0]",
+              "Delta": "[3.5, 5.5]",
+              "kappa": "[1.5, 4.0]",
+              "sigma": "[0.3, 0.9]",
+              "lam": "[0.1, 0.42]",
+              "f_rev": "[0.0, 0.15]",
+              "f_half": "[0.0, 0.05]"
+            },
+            "rationale": "Minimal diff: the code is unchanged; only parameter ranges move. The mechanism stays exactly as the arbiter prescribed: deterministic additive integration, the soft bound, constant logit noise, and a stimulus-independent structured lapse.\n\nExp 4 (0.44 vs 0.15) is the dominant residual. The lapse sub-components differ in how symmetric they are across the Exp 4 cells:\n- **Reversal and 50%-spike lapses.** In the low cells (prior 0.5 or 0.6, LLR \u2248 0), they land at or near the cell median, so they add almost no logit deviation. In the high cells (|L| \u2248 2), they are huge outliers. They therefore raise high-cell MAD relative to low-cell MAD.\n- **Uniform guessing.** It produces large logit deviations in both cell types (about 76% vs 87% of draws), so it is nearly MAD-neutral. pi_1, whose lapse was purely uniform at mean about 0.23, got 0.07 on Exp 4.\n\nThe critic suggested raising f_rev. I deliberately do not follow that advice. Per unit lapse mass, uniform guessing buys about 0.41 of Exp 6 tail mass for about 0.1 of Exp 4 asymmetry. Reversal buys 1.0 for about 1.0. Uniform is therefore about 4\u00d7 more efficient. So:\n- f_half shrinks to [0, 0.05].\n- f_rev shrinks to [0, 0.15]. A small reversal share is kept, as the arbiter requires.\n- lam shifts to [0.1, 0.42], mean \u2248 0.26.\n\nThe expected effects on the tail metrics are:\n- **Exp 6** is about lam*(0.9*0.41 + 0.075) \u2248 0.115, against an observed 0.12.\n- **Exp 5** is about 0.12\u20130.13.\n- **Exp 1** should drop: uniform mass dilutes the exact-100 share, since it contributes only 1/11 of the folded \u226590 window at bin 100.\n\nFollowing the critic, Delta narrows to [3.5, 5.5] and sigma to [0.3, 0.9]. This keeps engaged reports in the near-certain single-cue cells off bin 100, which lowers Exp 1 toward 0.14. It also strengthens raw-scale compression at the extremes, moving Exp 2 toward \u22121.5.\n\nExp 3's weight ratio is driven by engaged medians, and its alpha and beta ranges are unchanged, so it should be preserved."
+          },
+          "proposer_label": "pi_5",
+          "real_value": 0.08685714285714285,
+          "real_variance": 0.002904816326530612,
+          "predicted_values": [
+            {
+              "value": 0.09542857142857143,
+              "variance": 0.0028933877551020402,
+              "label": "pi_5"
+            },
+            {
+              "value": 0.04114285714285714,
+              "variance": 0.0011480816326530612,
+              "label": "pi_4"
+            },
+            {
+              "value": 0.08914285714285715,
+              "variance": 0.0028617142857142864,
+              "label": "pi_1"
+            },
+            {
+              "value": 0.07085714285714285,
+              "variance": 0.0032078367346938773,
+              "label": "pi_2"
+            },
+            {
+              "value": 0.06971428571428571,
+              "variance": 0.002356244897959184,
+              "label": "pi_3"
+            },
+            {
+              "value": 0.09828571428571428,
+              "variance": 0.0032052244897959182,
+              "label": "pi_6"
+            }
+          ],
+          "data_path": "data/round_003_obs_00.jsonl"
+        },
+        {
+          "experiment": {
+            "rationale": "Conflict-magnitude dose-response at near-matched integrated belief. All trials use one draw (n=1), so LLR = log(ph/pnh) under any reading of n.\n\nCells:\n- Baseline: 0.5 with 0.5/0.5.\n- Single-source anchors: prior-only 0.9 and 0.97; evidence-only LLR +2.20 and -3.48 at prior 0.5.\n- Symmetric conflict sweep: the prior and opposing evidence have equal magnitude x = 0.41, 1.10, 2.20, 3.48. That is 0.6 vs 0.4/0.6, 0.75 vs 0.25/0.75, 0.9 vs 0.1/0.9, 0.97 vs 0.03/0.97, plus a mirrored 0.03 vs 0.97/0.03.\n- Congruent cells: 0.75 with 0.75/0.25, and 0.9 with 0.9/0.1.\n\nAdvocated (stochastic partial integration):\n- In conflict cells, a fraction rho of trials answers from one cue. This gives modes at expit(alpha*x) and expit(-beta*x), on opposite sides of 50%, around a central integrated mode at (alpha-beta)*x.\n- Mode separation grows with x. So IQR, bimodality and the fraction of reports on the far side of 50% (relative to the median) should rise steeply across the sweep. Example: x=3.48 gives modes near 95% and 10-20%.\n- Single-source cells, including the extreme ones, show only logit-normal spread plus a small uniform floor, with no mirror-located mass.\n- Congruent cells show sub-additive medians and a lower tail at the single-cue values.\n\nCompeting (deterministic integration plus stimulus-independent lambda):\n- Conflict cells are unimodal at (alpha-beta)*x with constant logit spread.\n- Off-pattern mass is the same in every cell. It is uniform plus a small mirror mode at 100 minus the median, which is mild because lambda*f_rev is at most about 0.06.\n- Off-pattern mass therefore does not grow with x.\n- The extreme single-source cells (prior 0.97, LLR -3.48) should carry the same excess mirror mass (near 3-10%) as the conflict cells.\n\nRounding-robust metrics (10%-wide bins):\n1. The slope of conflict-cell IQR, and of opposite-side mass, against x. Advocated predicts a positive, accelerating slope; competing predicts flat.\n2. Mass within 10 points of the single-cue anchor medians in conflict cells, minus that band's mass in the baseline. Advocated predicts it grows with x; competing predicts about zero.\n3. Off-pattern mass in extreme single-source cells versus x=0.41 conflict. Competing predicts equal; advocated predicts both are small.\n4. Congruent additivity residuals computed from the anchor medians.\n\n12 unique trials, K=5.",
+            "trial_priors": [
+              0.5,
+              0.9,
+              0.97,
+              0.5,
+              0.5,
+              0.6,
+              0.75,
+              0.9,
+              0.97,
+              0.03,
+              0.75,
+              0.9
+            ],
+            "trial_p_signal_h": [
+              0.5,
+              0.5,
+              0.5,
+              0.9,
+              0.03,
+              0.4,
+              0.25,
+              0.1,
+              0.03,
+              0.97,
+              0.75,
+              0.9
+            ],
+            "trial_p_signal_not_h": [
+              0.5,
+              0.5,
+              0.5,
+              0.1,
+              0.97,
+              0.6,
+              0.75,
+              0.9,
+              0.97,
+              0.03,
+              0.25,
+              0.1
+            ],
+            "trial_n_signals": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    import numpy as np\n    import pandas as pd\n    d = data.copy()\n    pr = d['prior'].astype(float).clip(1e-6, 1 - 1e-6).values\n    L0 = np.log(pr) - np.log1p(-pr)\n    ll = d['log_lr'].astype(float).values\n    rb = d['response_bin'].astype(float).values\n    rc = np.clip(rb, 0.5, 99.5) / 100.0\n    d['_x'] = np.log(rc) - np.log1p(-rc)\n    d['_cell'] = d['prior'].astype(float).round(4).astype(str) + '_' + d['log_lr'].astype(float).round(4).astype(str)\n    inf_p = np.abs(L0) > 1e-6\n    inf_e = np.abs(ll) > 1e-6\n    conflict = inf_p & inf_e & (np.sign(L0) != np.sign(ll))\n    big = conflict & (np.abs(ll) >= 1.9) & (np.abs(L0) >= 1.9)\n    ctrl = ~conflict\n    d['_big'] = big\n    d['_ctrl'] = ctrl\n    bins = np.arange(101, dtype=float)\n    bc = np.clip(bins, 0.5, 99.5) / 100.0\n    bx = np.log(bc) - np.log1p(-bc)\n    thr = 1.8\n\n    def cell_stats(cd):\n        med = float(np.median(cd['response_bin'].astype(float).values))\n        mc = min(max(med, 0.5), 99.5) / 100.0\n        m = np.log(mc) - np.log1p(-mc)\n        far = np.abs(cd['_x'].values - m) >= thr\n        width = float(np.sum(np.abs(bx - m) >= thr))\n        return int(far.sum()), len(cd), width\n\n    vals = []\n    for _, sd in d.groupby('subject_id'):\n        cf = 0.0\n        cw = 0.0\n        for _, cd in sd[sd['_ctrl']].groupby('_cell'):\n            nf, n, w = cell_stats(cd)\n            cf += nf\n            cw += n * w\n        bf = 0.0\n        bn = 0.0\n        bw = 0.0\n        for _, cd in sd[sd['_big']].groupby('_cell'):\n            nf, n, w = cell_stats(cd)\n            bf += nf\n            bn += n\n            bw += n * w\n        if bn < 1 or cw <= 0:\n            continue\n        dens = cf / cw\n        obs = bf / bn\n        exp = dens * (bw / bn)\n        v = obs - exp\n        if np.isfinite(v):\n            vals.append(v)\n    if len(vals) == 0:\n        return 0.0\n    return float(np.mean(vals))\n",
+            "rationale": "Conflict-specific excess of far-from-core responses, with the stimulus-independent off-task floor cancelled within each subject. In the large-conflict cells (prior 0.9 vs LLR -2.2, prior 0.97 vs -3.48, prior 0.03 vs +3.48), the advocated cue-selection mixture puts a fraction rho of trials at the single-cue anchors, for example near 95% and near 10% when x=3.48. These anchors sit about 2-3 logit units from the subject's integrated core, so they land outside the band within 1.8 logits of the subject's cell median. The competing theory has no such mixture, so its only far mass is the uniform guessing component lambda (plus reversals and tails), and that has the same density per response bin in every cell.\n\nThe metric is built per subject in three steps:\n1. Estimate the per-bin density of far responses from all non-conflict cells: baseline, prior-only, evidence-only and congruent cells, where the advocated theory predicts no anchor mass.\n2. Multiply that density by the width, in bins, of the far region in each conflict cell. This gives the expected uniform-floor mass there.\n3. Subtract that expectation from the observed far fraction in the conflict cells, then average across subjects.\n\nPredictions:\n- Competing: about 0 or slightly negative, because uniform mass cancels exactly. Reversal reports at the mirror of extreme single-source cells inflate the control density slightly.\n- Advocated: about rho*0.7, roughly 0.12-0.15.\n\nRobustness:\n- The 1.8-logit threshold keeps Gaussian core tails small.\n- Wide bin regions and subject-specific medians make the metric robust to 5%/10% rounding and to individual alpha/beta.\n- Subtracting each subject's own floor removes lambda's large between-subject variance, which sank earlier count-based metrics."
+          },
+          "proposer_theory": {
+            "description": "Stochastic partial integration with a soft-bounded response range.\n\nOn average, people combine prior and evidence additively in log-odds space with distorted weights: L = alpha*logit(prior) + beta*LLR. Here alpha<1 is base-rate neglect and beta<1 is conservatism. Integration is not guaranteed on every trial.\n\n(a) Integration rule. When both cues are informative (prior differs from 50% and LLR differs from 0), the subject fails to integrate with probability rho and answers from a single cue:\n- with probability q it anchors on the prior (alpha*L0);\n- with probability 1-q it goes by the evidence alone (beta*LLR), a representativeness shortcut.\nWhen only one cue is informative, the single-cue route coincides with integration, so single-source cells show no extra spread.\n\n(b) Soft-bounded output. The chosen internal log-odds passes through a saturating transform: L' = sign(L)*Delta*tanh((|L|/Delta)^kappa)^(1/kappa). With kappa>1 the transform is nearly linear up to about |L|\u2248Delta and then saturates sharply at Delta. It therefore compresses only beyond about the 97-99.9% level, and it never makes encoding gains depend on magnitude in the moderate range. kappa=1 recovers the plain tanh bound.\n\n(c) Noise. Constant Gaussian response noise sigma is added in log-odds around the bounded value, plus a uniform lapse epsilon.\n\nPredictions:\n- Single-source cells behave like a fixed-weight model, with compression only at the far extremes.\n- Two-cue cells carry extra, possibly bimodal spread from the strategy mixture.\n- Congruent medians are sub-additive.\n- Exact-100 reports arise mostly via rounding of reports in the high 90s.",
+            "predict_source": "def predict(parameters, stimulus, history):\n    import numpy as np\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float)) * np.ones_like(prior)\n    L0 = np.log(prior) - np.log1p(-prior)\n\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    rho = float(parameters[\"rho\"])\n    q = float(parameters[\"q\"])\n    Delta = max(float(parameters[\"Delta\"]), 1e-3)\n    kappa = max(float(parameters[\"kappa\"]), 1e-3)\n    sigma = max(float(parameters[\"sigma\"]), 1e-3)\n    eps = float(parameters[\"epsilon\"])\n\n    both = ((np.abs(L0) > 1e-6) & (np.abs(llr) > 1e-6)).astype(float)\n    w_int = 1.0 - rho * both\n    w_p = rho * q * both\n    w_e = rho * (1.0 - q) * both\n\n    mu_int = alpha * L0 + beta * llr\n    mu_p = alpha * L0\n    mu_e = beta * llr\n\n    def bound(x):\n        u = np.abs(x) / Delta\n        return np.sign(x) * Delta * np.tanh(u ** kappa) ** (1.0 / kappa)\n\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    z_edges = np.empty(K + 1)\n    z_edges[0] = -np.inf\n    z_edges[-1] = np.inf\n    inner = edges[1:-1]\n    z_edges[1:-1] = np.log(inner) - np.log1p(-inner)\n\n    def bins(mu):\n        m = bound(mu)\n        cdf = ndtr((z_edges[None, :] - m[:, None]) / sigma)\n        return np.clip(np.diff(cdf, axis=1), 0.0, None)\n\n    probs = (w_int[:, None] * bins(mu_int)\n             + w_p[:, None] * bins(mu_p)\n             + w_e[:, None] * bins(mu_e))\n    probs = probs / np.maximum(probs.sum(axis=1, keepdims=True), 1e-300)\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probs):\n    import numpy as np\n    p = np.asarray(probs, dtype=np.float64)\n    p = np.clip(p, 0.0, None)\n    p /= p.sum()\n    return int(np.random.choice(len(p), p=p))\n",
+            "parameters": {
+              "alpha": "[0.6, 1.1]",
+              "beta": "[0.3, 1.0]",
+              "rho": "[0.0, 0.4]",
+              "q": "[0.3, 0.8]",
+              "Delta": "[3.5, 7.0]",
+              "kappa": "[1.5, 4.0]",
+              "sigma": "[0.3, 1.0]",
+              "epsilon": "[0.0, 0.15]"
+            },
+            "rationale": "This is a minimal-diff edit of the accepted iteration-1 candidate (loss 0.3965). The integration core, the prior-only/evidence-only mixture gated to two-cue cells, the noise and the lapse are all unchanged. Only the output bound and two parameter ranges change, following the critic's diagnosis that all three remaining misses (Experiments 1, 2 and 3) come from a bound that is too tight.\n\nWhy the bound needed a new shape, not just a larger Delta:\n- With plain tanh, compression starts immediately: x - x^3/(3*Delta^2).\n- Even at Delta=6, the prior-0.99 cell (alpha*L0 \u2248 4.1) is pulled to \u22483.6, i.e. about 97%.\n- That still starves Experiment 1 of 100-bin reports and inflates the Experiment 3 ratio through the compressed P/E denominators.\n\nThe edits:\n1. **Softer transform.** The bound is now Delta*tanh((|L|/Delta)^kappa)^(1/kappa), the critic's option 2. With kappa \u2248 2-4 it is essentially linear up to |L| \u2248 Delta and saturates sharply only beyond. It nests the old tanh at kappa=1.\n2. **Delta range moved to [3.5, 7].** The cap then sits above about 97%, so it bites only above the 98-99% level.\n3. **Lower beta bound reduced to 0.3.** Experiment 3's ratio is roughly beta/alpha when compression is negligible, so this allows the observed 0.67 without relying on compression.\n\nExpected effects:\n- **Experiment 1.** Moderately extreme cells (Bayes 0.95-0.996) return to centres near 94-98%. Rounding then produces exact-100 rates near pi_1's (about 0.14-0.17), instead of the previous 0.046.\n- **Experiment 2.** Extreme-cell centres return to the region where constant log-odds noise yields tight probability spread, so the ratio moves back toward -1.5.\n- **Experiment 3.** P and E are no longer disproportionately compressed relative to P\u2212C, so the ratio falls from 0.85 toward beta/alpha \u2248 0.67.\n- **Experiment 4.** Its gain comes from the untouched two-cue mixture, so it should be preserved (about 0.18 vs 0.15 observed)."
+          },
+          "proposer_label": "pi_4",
+          "real_value": -0.022263018353537833,
+          "real_variance": 0.004757948010651326,
+          "predicted_values": [
+            {
+              "value": 0.07921086725449455,
+              "variance": 0.01515665616620473,
+              "label": "pi_4"
+            },
+            {
+              "value": -0.01978379545292908,
+              "variance": 0.00993772301288051,
+              "label": "pi_5"
+            },
+            {
+              "value": 0.00031198770537362253,
+              "variance": 0.01161449340129941,
+              "label": "pi_1"
+            },
+            {
+              "value": -0.03407451599144522,
+              "variance": 0.009231722322580184,
+              "label": "pi_2"
+            },
+            {
+              "value": 0.041710133393875914,
+              "variance": 0.010002826467198321,
+              "label": "pi_3"
+            },
+            {
+              "value": -0.03954639731676323,
+              "variance": 0.005594611732519893,
+              "label": "pi_6"
+            }
+          ],
+          "data_path": "data/round_003_obs_01.jsonl"
+        }
+      ],
+      "next_theory": {
+        "description": "Sub-additive deterministic integration, salient-value response mapping, and trait-level off-task responding.\n\n(1) ENGAGED INTEGRATION (deterministic, unimodal; unchanged from the accepted base)\nThe prior and the evidence are weighted in log-odds: x = alpha*logit(prior) and y = beta*LLR, with beta < alpha.\n- Congruent cues are pooled sub-additively by a p-norm: |L| = (|x|^p + |y|^p)^(1/p), with p > 1.\n- Conflicting cues give a proportionally shrunk difference: L = s_conf*(x + y).\n- A single informative cue passes through unchanged.\n- There is no cue selection, so engaged conflict cells are unimodal.\n\n(2) SALIENT-VALUE RESPONSE MAPPING (revised gate)\nThere are two routes to a report.\n- Canonical-value route. When the internal belief itself is near-certain, the person often skips fine-grained readout. They directly report the canonical salient value closest to the belief (95, 99 or 100; 5, 1 or 0 on the other side). This is a threshold-like gate on the latent's extremity, centred near 92\u201394%: G = g_e * sigmoid((|2*expit(L) - 1| - c)/w), with w small. Because the canonical value depends only on the latent, the same value repeats within a subject and cell.\n- Graded route. Otherwise the report is a continuous logit-Gaussian read-out (constant sigma). A small extremity-independent chance g_c snaps it to the nearest multiple of 5.\n- The 80\u201392% band is therefore read out continuously with constant log-odds noise. True extremes collapse onto repeated canonical values.\n\n(3) TRAIT-LEVEL OFF-TASK RESPONDING\nA subject-specific mass lambda is independent of the stimulus. It splits into three parts:\n- uniform guessing;\n- polarity-reversal (100 - R) reports;\n- 'don't know' 50% reports.",
+        "predict_source": "def predict(parameters, stimulus, history):\n    import numpy as np\n    from scipy.special import ndtr, expit\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float)) * np.ones_like(prior)\n    L0 = np.log(prior) - np.log1p(-prior)\n\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    p_sub = max(float(parameters[\"p_sub\"]), 1.0)\n    s_conf = float(parameters[\"s_conf\"])\n    sigma = max(float(parameters[\"sigma\"]), 1e-3)\n    g_c = float(np.clip(parameters[\"g_c\"], 0.0, 1.0))\n    g_e = float(np.clip(parameters[\"g_e\"], 0.0, 1.0))\n    snap_c = float(parameters[\"snap_c\"])\n    w_gate = 0.015\n    lam = float(np.clip(parameters[\"lam\"], 0.0, 1.0))\n    f_rev = float(np.clip(parameters[\"f_rev\"], 0.0, 1.0))\n    f_half = float(np.clip(parameters[\"f_half\"], 0.0, 1.0))\n    tot = f_rev + f_half\n    if tot > 1.0:\n        f_rev /= tot\n        f_half /= tot\n    f_uni = max(0.0, 1.0 - f_rev - f_half)\n\n    # --- sub-additive deterministic integration ---\n    x = alpha * L0\n    y = beta * llr\n    prod = x * y\n    cong = prod > 0\n    conf = prod < 0\n    ax = np.abs(x)\n    ay = np.abs(y)\n    Lcong = np.sign(x + y) * (ax ** p_sub + ay ** p_sub) ** (1.0 / p_sub)\n    Lconf = s_conf * (x + y)\n    L = np.where(cong, Lcong, np.where(conf, Lconf, x + y))\n\n    # --- continuous noisy latent over 1% bins (logit-Gaussian) ---\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    z_edges = np.empty(K + 1)\n    z_edges[0] = -np.inf\n    z_edges[-1] = np.inf\n    inner = edges[1:-1]\n    z_edges[1:-1] = np.log(inner) - np.log1p(-inner)\n    cdf = ndtr((z_edges[None, :] - L[:, None]) / sigma)\n    cont = np.clip(np.diff(cdf, axis=1), 0.0, None)\n    cont = cont / np.maximum(cont.sum(axis=1, keepdims=True), 1e-300)\n\n    # --- salient grid ---\n    grid = np.array([0, 1] + list(range(5, 100, 5)) + [99, 100], dtype=float)\n    is5 = (np.mod(grid, 5) == 0).astype(float)\n    ks = np.arange(K, dtype=float)\n\n    # graded route: small, extremity-independent per-draw snapping\n    dist = np.abs(ks[:, None] - grid[None, :]) + 0.01 * (1.0 - is5[None, :])\n    target = grid[np.argmin(dist, axis=1)].astype(int)\n    S = np.zeros((K, K))\n    S[np.arange(K), target] = 1.0\n    graded = cont * (1.0 - g_c) + g_c * (cont @ S)\n\n    # canonical-value route: threshold gate on latent extremity, snap of the latent itself\n    pL = expit(L)\n    ext_lat = np.abs(2.0 * pL - 1.0)\n    G = g_e * expit((ext_lat - snap_c) / w_gate)\n    v = 100.0 * pL\n    dlat = np.abs(v[:, None] - grid[None, :]) + 0.01 * (1.0 - is5[None, :])\n    lat_idx = grid[np.argmin(dlat, axis=1)].astype(int)\n    D = np.zeros((len(L), K))\n    D[np.arange(len(L)), lat_idx] = 1.0\n\n    eng = (1.0 - G[:, None]) * graded + G[:, None] * D\n    eng = eng / np.maximum(eng.sum(axis=1, keepdims=True), 1e-300)\n\n    # --- trait-level off-task responding ---\n    rev = eng[:, ::-1]\n    spike = np.zeros(K)\n    spike[50] = 1.0\n    uni = np.full(K, 1.0 / K)\n    probs = (1.0 - lam) * eng + lam * (f_uni * uni[None, :] + f_rev * rev + f_half * spike[None, :])\n    probs = np.clip(probs, 0.0, None)\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+        "policy_source": "def policy(probs):\n    import numpy as np\n    p = np.asarray(probs, dtype=np.float64)\n    p = np.clip(p, 0.0, None)\n    p /= p.sum()\n    return int(np.random.choice(len(p), p=p))\n",
+        "parameters": {
+          "alpha": "[0.82, 1.02]",
+          "beta": "[0.36, 0.82]",
+          "p_sub": "[1.2, 2.0]",
+          "s_conf": "[0.7, 1.0]",
+          "sigma": "[0.3, 0.7]",
+          "g_c": "[0.0, 0.2]",
+          "g_e": "[0.55, 0.9]",
+          "snap_c": "[0.84, 0.88]",
+          "lam": "[0.11, 0.39]",
+          "f_rev": "[0.1, 0.3]",
+          "f_half": "[0.02, 0.1]"
+        },
+        "rationale": "This is a minimal edit on the accepted iter-1 base. The integration and the off-task mixture are unchanged; only the snapping gate is replaced.\n\nWhy iter 1 failed on Exp4 and iter 2 failed on Exp2:\n- In iter 1, per-draw snap probability g = g_c + (g_e-g_c)*|2x-1|^2 was already large in the 80\u201392% band. There the 85/90/95 grid is coarse in log-odds, so Exp4 high-cell logit MAD was inflated (0.44 vs 0.15).\n- Iter 2's steeper power law, which the gate rejected, starved the 95% cells of snapping and broke Exp2. A smooth power law cannot be near 1 at 95% and near 0 at 85\u201390%.\n\nEdit 1: the snap-probability gate. Following the critic's advice, the power law is replaced by a sharp logistic gate on the latent's extremity, centred at 92\u201394% (snap_c in [0.84, 0.88], width 0.015).\n- In Exp4, the high-cell latents (79\u201391%) get essentially no extremity snapping. They keep constant log-odds noise plus only a small g_c (lowered to [0, 0.2]) and the shared rounding stage. The Exp4 ratio should fall toward pi_1/pi_4 levels, about 0.1\u20130.2.\n\nEdit 2: snap the latent, not the draw. Gated snapping now targets the salient value nearest the noiseless latent rather than each noisy draw. This yields within-subject repeat identity at 95 and 99 in Exp2's extreme cells.\n- The g_e range [0.55, 0.9] is tuned so that roughly half of the extreme-cell deviations are exactly zero. That puts the pooled median extreme deviation around 0.005, giving the observed log ratio of about -1.5 rather than collapsing it to -2.\n\nEdit 3: small parameter-range changes.\n- beta is widened slightly ([0.36, 0.82]), between the iter-1 and iter-2 ranges. This raises the between-subject Exp3 variance and nudges the Exp3 point estimate down slightly.\n- lam gets a hair more mass, for Exp6.\n- f_rev and f_half are unchanged, so Exp5, Exp7 and Exp8 hold.\n- 95 and 99 canonical reports, passed through the shared 10%/5% rounding, still produce about 13\u201315% exact-100 reports in Exp1's window.\n\nThe model stays within the prescribed family: deterministic, unimodal sub-additive integration; salient-value mapping that is stronger at the extremes; and stimulus-independent off-task mass with mirror, uniform and 50% components. No bound and no cue selection are added."
+      },
+      "next_theory_idx": 2,
+      "next_theory_label": "pi_6"
     }
   ]
 }
