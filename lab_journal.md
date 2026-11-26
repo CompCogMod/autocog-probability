@@ -183,15 +183,46 @@ Opus's one surviving design proposal already targets the second.
 - Several margins are tiny.
 - Hill's and Howe's wins should be left out of any "who wins where" tally.
 
+## 2026-11-26: First design round (Opus 5.5, `llo_bias` vs `llo_sampler`)
+
+Results are in `results/probability_updating/autocog/design_llo_bias_vs_llo_sampler_anthropic-claude-opus-5.5_run1/designs.md`. The run used reasoning effort "high" via OpenRouter, with 50 simulated subjects per theory. The first metric each side proposed passed the test (Welch p < .01 at N = 25 subjects per theory).
+
+| Proposed by | Design (12 cells × 5 reps) | Metric | llo_bias | llo_sampler | p |
+|---|---|---|---|---|---|
+| `llo_bias` | mixes near-50%, conflict, extreme-prior and pure-prior cells | prior weight α estimated from median log-odds in prior-dominated cells | 0.77 | 1.00 | .0007 |
+| `llo_sampler` | pure-prior cells (.15/.3/.7/.85, uninformative evidence), evidence-only cells at prior .5, conflict cells | median folded (report − prior) in the pure-prior cells | −0.05 | +0.03 | .00005 |
+
+**Problem: both accepted metrics separate the theories by the prior weight α, not by the noise mechanism.**
+- The two theories have the same mean rule, but their calibrated α ranges differ:
+  - llo_bias: [0.73, 1.02];
+  - llo_sampler: [0.77, 1.94].
+- The upper tail of llo_sampler's range comes from fits where α is unidentified or at its bound:
+  - Augenblick 1a, where every prior is 50%, so α = 1.5 is unconstrained;
+  - Howe 1 and 3, with α ≈ 3 on 300–600 one-shot trials.
+- So the "distinguishing" experiment tests a calibration artifact: does the prior get over-weighted? That is not the question of bias vs. sampling.
+
+**The design rationales do target the right signatures, but the metrics didn't use them.** Those signatures are:
+- how the spread of reports changes with how extreme the belief is: constant spread in log-odds vs. binomial spread;
+- answers piling up at 0% and 100%;
+- whether averaging pulls the mean toward 50%.
+
+The LLMs went for the easiest t-test win.
+
+**Fix before the next round** (open items, item 1).
+
 ---
 
 ## Open items / next steps
 
-1. **Add OpenRouter credit and rerun the design round:**
+1. **Fix the calibration so that compared theories differ only in their noise, then rerun the design round.** Round 1 (2026-11-26) separated the theories through α ranges that are calibration artifacts. Options:
+   - give both theories the same mean-rule parameter ranges (α, β);
+   - calibrate only from studies where a parameter is identified (prior varies; estimate not at a bound);
+   - or both.
+
+   Command used for round 1:
    ```bash
    uv run --with anthropic python main_probability_updating.py --design_only --llm_provider openrouter --llm_model anthropic/claude-opus-5.5 --reasoning_effort high --run_id 1
    ```
-   It writes the proposed designs, metrics, predictions and p-values to `results/probability_updating/autocog/.../designs.md`.
 2. **Run the full loop** with a ground-truth theory, e.g. `--ground_truth weak_strong_evidence`. This tests whether the arbiter and improver recover the true theory.
 3. **Get Möbius (2022) and Loibl & Leuders (2025)**, convert them, and refit.
 4. **Reproducibility:** add `anthropic` to `pyproject.toml`; for now commands need `--with anthropic`. Optionally make the OpenRouter `max_tokens` (currently 128k) a setting; OpenRouter checks the full limit against the remaining credit before each call.

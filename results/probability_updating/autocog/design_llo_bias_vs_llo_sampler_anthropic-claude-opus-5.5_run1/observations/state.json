@@ -1,0 +1,193 @@
+{
+  "rounds": [
+    {
+      "observations": [
+        {
+          "experiment": {
+            "rationale": "Goal: separate constant Gaussian noise in log-odds space (advocated) from binomial sampling noise around a log-odds-distorted belief (competing). I assume log LR = n_signals * log(p_h / p_not_h), with p_h and p_not_h giving the per-draw probability of the observed colour; all draws in a trial share that colour. There are 12 unique trials, so K = 5 repetitions each, enough to estimate within-cell spread.\n\n(1) Variability profile.\n- Advocated theory: spread is constant in log-odds. In probability units the SD is about sigma*p(1-p), but the distribution is skewed, with tails reaching well into the interior even when the central judgment is extreme.\n- Competing theory: SD in probability is sqrt(p(1-p)/N), so the log-odds SD blows up as 1/sqrt(N p(1-p)). Near 0 or 100, reports pile onto the endpoint with almost no spread.\n- Cells used to probe this:\n  - near-50% cells: prior .5 with LLR .41; prior .6 with LLR .20;\n  - conflict cells, where a strong prior is opposed by strong evidence: .1 vs +2.54; .9 vs -2.54;\n  - extreme consistent cells: prior .5 with LLR \u00b14.24; prior .9 with LLR +2.54; prior .1 with LLR -2.54; prior .3 with LLR +2.77.\n- Key metric: the ratio of within-cell spread at extreme cells to spread at mid cells, in probability units and in log-odds. The two theories predict opposite trends in log-odds, and a robust measure such as IQR or MAD survives the 5/10% rounding.\n\n(2) Mean shrinkage.\n- Advocated theory: averaging expit over log-odds noise pulls the probability-space mean toward 50% at extreme targets. A small sigma would remove this, but then the large interior tails would not appear either.\n- Competing theory: the binomial mean equals the distorted target exactly.\n\n(3) Prior weighting, decoupled from evidence.\n- Pure-prior cell: prior .8 with zero LLR (p_h = p_not_h).\n- Very extreme priors with weak opposing evidence: .02 and .98 with LLR \u22130.41.\n- These cells estimate alpha directly. The competing theory permits alpha > 1 (over-extremised priors, reports beyond Bayes); the advocated theory caps alpha near 1, predicting base-rate neglect or near-Bayesian use of the prior.\n\n(4) Independence of prior and evidence.\n- Prior and LLR are crossed independently (priors .02-.98; LLR from -4.24 to +4.24) so that alpha and beta are identifiable separately from the noise parameters.\n- Advocated prediction: the median report in log-odds is linear in prior log-odds and LLR, and its spread is constant across cells.",
+            "trial_priors": [
+              0.5,
+              0.5,
+              0.5,
+              0.1,
+              0.9,
+              0.9,
+              0.1,
+              0.02,
+              0.98,
+              0.8,
+              0.3,
+              0.6
+            ],
+            "trial_p_signal_h": [
+              0.6,
+              0.7,
+              0.3,
+              0.7,
+              0.3,
+              0.7,
+              0.3,
+              0.6,
+              0.4,
+              0.5,
+              0.8,
+              0.55
+            ],
+            "trial_p_signal_not_h": [
+              0.4,
+              0.3,
+              0.7,
+              0.3,
+              0.7,
+              0.3,
+              0.7,
+              0.4,
+              0.6,
+              0.5,
+              0.2,
+              0.45
+            ],
+            "trial_n_signals": [
+              1,
+              5,
+              5,
+              3,
+              3,
+              3,
+              3,
+              1,
+              1,
+              2,
+              2,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    p = data['prior'].values.astype(float)\n    l = data['log_lr'].values.astype(float)\n    r = np.clip(data['response'].values.astype(float), 0.005, 0.995)\n    z = np.log(r / (1.0 - r))\n    def close(a, b):\n        return np.abs(a - b) < 1e-3\n    def med(mask):\n        if mask.sum() == 0:\n            return None\n        return float(np.median(z[mask]))\n    def lo(x):\n        return float(np.log(x / (1.0 - x)))\n    num = 0.0\n    den = 0.0\n    # symmetric pairs at prior .9 and .1: evidence term cancels\n    for pr in [0.9, 0.1]:\n        a = med(close(p, pr) & (l > 1e-9))\n        b = med(close(p, pr) & (l < -1e-9))\n        if a is not None and b is not None:\n            s = np.sign(lo(pr))\n            num += s * 0.5 * (a + b)\n            den += abs(lo(pr))\n    # extreme priors .98 / .02 with weak opposing evidence\n    a = med(close(p, 0.98))\n    b = med(close(p, 0.02))\n    if a is not None and b is not None:\n        num += 0.5 * (a - b)\n        den += abs(lo(0.98))\n    # pure prior cell (.8, zero evidence)\n    c = med(close(p, 0.8) & (np.abs(l) < 1e-9))\n    if c is not None:\n        num += c\n        den += abs(lo(0.8))\n    if den == 0:\n        return float('nan')\n    return float(num / den)\n",
+            "rationale": "Estimates the prior weight alpha directly and robustly, decoupled from the evidence weight: it uses per-cell MEDIAN responses in log-odds (robust to the large lapse rates and to 5/10% rounding). Beta is cancelled by averaging the symmetric pairs (prior .9 with +/-LLR, prior .1 with +/-LLR); it is nearly irrelevant for the .98/.02 pair with weak opposing evidence; and it is exactly absent for the prior-.8, zero-LLR cell. The estimate is the summed signed median log-odds divided by the summed |prior log-odds|. The advocated log-odds-noise theory caps prior weighting near or below 1: alpha lies in about [0.73, 1.02], i.e. base-rate neglect or near-Bayesian use of the prior, so the metric should land around 0.8-0.9. The competing binomial-sampling theory needs over-extremised priors (alpha in about [0.77, 1.94]) to account for the pile-up of reports at the endpoints. Its reports therefore sit further from 50% on prior-dominated cells, giving a metric well above 1 (clipping at 0.5%/99.5% only partially limits this). The metric is a median-based ratio that is valid on a single subject's slice and pools over 7 cells (about 35 trials), so per-subject variance should be moderate, while the predicted means differ by roughly 0.3-0.5."
+          },
+          "proposer_theory": {
+            "description": "Probability distortion is a systematic bias applied when the judgment is formed: people combine prior and evidence additively in log-odds space, as Bayes prescribes, but with the wrong weights. The posterior log-odds equal alpha times the prior log-odds plus beta times the log likelihood ratio. alpha < 1 is base-rate neglect (the prior is underweighted), beta < 1 is conservatism (the evidence is underweighted) and beta > 1 is overreaction; alpha = beta = 1 recovers Bayes. Because the distortion is a deterministic transformation, the same stimulus always yields the same central judgment; trial-to-trial variability is a separate, constant response noise in log-odds space (sigma), plus a lapse rate epsilon. The theory therefore predicts that mean distortion and response variability are unrelated: changing how noisy responses are does not change their average, and the average is a fixed linear function of prior and evidence log-odds.\n",
+            "predict_source": "def predict(parameters, stimulus, history):\n    # See bayes_noise.yaml for the stimulus / output contract.\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float))\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    mu = alpha * (np.log(prior) - np.log1p(-prior)) + beta * llr\n\n    edges = np.clip((np.arange(K + 1) - 0.5) / (K - 1), 0.0, 1.0)\n    with np.errstate(divide=\"ignore\"):\n        z_edges = np.log(edges) - np.log1p(-edges)\n    sigma = float(parameters[\"sigma\"])\n    probs = np.diff(ndtr((z_edges[None, :] - mu[:, None]) / sigma), axis=1)\n\n    eps = float(parameters[\"epsilon\"])\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probabilities):\n    probabilities = probabilities / probabilities.sum()\n    return int(np.random.choice(len(probabilities), p=probabilities))\n",
+            "parameters": {
+              "alpha": "[0.7321, 1.016]",
+              "beta": "[0.136, 0.7868]",
+              "sigma": "[0.1955, 1.207]",
+              "epsilon": "[0.04997, 0.4299]"
+            },
+            "rationale": null
+          },
+          "proposer_label": "pi_1",
+          "real_value": null,
+          "real_variance": null,
+          "predicted_values": [
+            {
+              "value": 0.774355217863752,
+              "variance": 0.017757671152599023,
+              "label": "pi_1"
+            },
+            {
+              "value": 0.9952229688887514,
+              "variance": 0.07076536065436971,
+              "label": "pi_2"
+            }
+          ]
+        },
+        {
+          "experiment": {
+            "rationale": "Goal: separate a log-odds-distorted belief reported by binomial sampling (advocated) from the same distortion reported with constant Gaussian noise in log-odds (competing). Every trial uses a single signal (n=1), so the log LR is just log(p_h/p_not_h) and there is no ambiguity about how draws combine. There are 12 unique trials, giving K=5 repetitions each.\n\n(A) Pure-prior cells. The evidence is uninformative (p_h = p_not_h = 0.5) and the priors are .15, .30, .70 and .85.\n- These isolate alpha.\n- Advocated: alpha may exceed 1 (up to about 1.9). Reports would then be more extreme than the stated prior, e.g. prior .85 reported near 90-95%.\n- Competing: alpha is at most about 1.02, so reports are at or regressive toward 50%.\n- Metric: median report minus prior, signed away from 50%.\n\n(B) Evidence-only cells at prior .5. The log LRs are +0.41, +1.39, -1.39, +2.94 and +4.60.\n- These trace beta, and they trace the variability profile as the distorted belief moves from about 55% to about 95%.\n- Advocated, spread in probability units: SD = sqrt(p(1-p)/N), which falls slowly with extremity (about 0.6x from p=.5 to p=.9).\n- Competing, spread in probability units: SD is roughly sigma*p(1-p), which falls faster (about 0.36x over the same range).\n- In log-odds, the advocated spread grows toward the extremes while the competing spread is flat.\n- Means: the binomial mean equals expit(target) exactly, whereas Gaussian log-odds noise shrinks the probability mean toward 50%.\n\n(C) Conflict cells. Strong priors are opposed by evidence of equal strength, so the Bayesian posterior is 50%: .90 vs -2.20, .20 vs +1.39, .95 vs -2.94, .99 vs -4.60.\n- Both theories shift these cells toward the prior direction when alpha > beta.\n- Advocated: alpha can be well above beta, giving an extreme internal belief and tight, near-endpoint reports.\n- Competing: alpha is at most 1, so the belief stays closer to 50%, with constant log-odds spread and therefore wide spread in probability units.\n- These cells also test linear additivity. As the paired prior and LLR scale up together, the advocated theory, with alpha above beta, predicts the prior to dominate more and more. The competing theory, with both weights below 1, predicts much milder drift.\n\nKey metrics, chosen to be robust to the 5/10% rounding:\n- median report per cell;\n- IQR per cell, in probability units and in log-odds;\n- the slope of log-odds IQR against distance of the median from 50%;\n- the sign of the pure-prior extremization.",
+            "trial_priors": [
+              0.15,
+              0.3,
+              0.7,
+              0.85,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.9,
+              0.2,
+              0.99
+            ],
+            "trial_p_signal_h": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.6,
+              0.8,
+              0.2,
+              0.95,
+              0.99,
+              0.1,
+              0.8,
+              0.01
+            ],
+            "trial_p_signal_not_h": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.4,
+              0.2,
+              0.8,
+              0.05,
+              0.01,
+              0.9,
+              0.2,
+              0.99
+            ],
+            "trial_n_signals": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    d = data[(np.abs(data['log_lr']) < 1e-9) & (np.abs(data['prior'] - 0.5) > 0.05)]\n    if len(d) == 0:\n        return float('nan')\n    prior = d['prior'].to_numpy(dtype=float)\n    resp = d['response'].to_numpy(dtype=float)\n    folded_resp = np.where(prior > 0.5, resp, 1.0 - resp)\n    folded_prior = np.where(prior > 0.5, prior, 1.0 - prior)\n    dev = folded_resp - folded_prior\n    return float(np.median(dev))\n",
+            "rationale": "This metric uses only the pure-prior cells (uninformative evidence, priors .15/.30/.70/.85), so the report depends on alpha alone. Each response is folded so that 'away from 50% in the prior's direction' is positive. The metric is the median of the folded report minus the folded stated prior.\n\nAdvocated theory: alpha ranges up to about 1.94 (mean about 1.36), so internal beliefs are often more extreme than the stated prior. For example, prior .85 with alpha 1.36 gives about .91, and prior .70 gives about .76. The binomial reports are centred on that belief, so the median deviation is positive, around +0.04 to +0.06.\n\nCompeting theory: alpha is at most about 1.02, so beliefs are at or regressive toward 50%. The log-odds Gaussian noise is symmetric in log-odds, so the median stays at the regressed belief. The deviation is therefore zero or negative, around -0.02 to -0.03.\n\nChoices that keep the estimate stable:\n- The median resists lapses and the 5/10% rounding.\n- Pooling 20 trials per subject (4 priors x 5 reps) helps.\n- The competing theory's narrow alpha range keeps its between-subject variance small.\n\nTogether these should give a large t at N=25."
+          },
+          "proposer_theory": {
+            "description": "Both mechanisms operate: people misweight prior and evidence when they form an internal belief, and then report that belief by sampling. The internal belief is expit(alpha * prior log-odds + beta * log LR) (base-rate neglect for alpha < 1, conservatism for beta < 1). The subject draws N mental samples from that belief and reports the proportion k/N in which H holds. The mean report therefore carries the log-odds distortion, while trial-to-trial variability is binomial: largest when the distorted belief is near 50% and vanishing near 0% and 100%. A small motor/reporting noise tau smears the discrete values onto the 0-100 scale, and a lapse rate epsilon gives occasional random reports. Non-integer N mixes neighbouring integer sample sizes.\n",
+            "predict_source": "def predict(parameters, stimulus, history):\n    # See bayes_noise.yaml for the stimulus / output contract.\n    from scipy.special import ndtr\n    from scipy.stats import binom\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float))\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    target = 1.0 / (1.0 + np.exp(-(alpha * (np.log(prior) - np.log1p(-prior)) + beta * llr)))\n\n    tau = float(parameters[\"tau\"])\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    edges[0], edges[-1] = -np.inf, np.inf\n\n    def report_dist(n):\n        k = np.arange(n + 1)\n        pmf = binom.pmf(k[None, :], n, target[:, None])\n        to_bins = np.diff(ndtr((edges[None, :] - (k / n)[:, None]) / tau), axis=1)\n        return pmf @ to_bins\n\n    N = float(parameters[\"N\"])\n    n0 = max(int(np.floor(N)), 1)\n    w = min(max(N - n0, 0.0), 1.0)\n    probs = report_dist(n0) if w == 0.0 else (1.0 - w) * report_dist(n0) + w * report_dist(n0 + 1)\n\n    eps = float(parameters[\"epsilon\"])\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probabilities):\n    probabilities = probabilities / probabilities.sum()\n    return int(np.random.choice(len(probabilities), p=probabilities))\n",
+            "parameters": {
+              "alpha": "[0.7697, 1.944]",
+              "beta": "[0.1168, 0.9097]",
+              "N": "[9.983, 200]",
+              "tau": "[0.005, 0.09912]",
+              "epsilon": "[0.0548, 0.3936]"
+            },
+            "rationale": null
+          },
+          "proposer_label": "pi_2",
+          "real_value": null,
+          "real_variance": null,
+          "predicted_values": [
+            {
+              "value": 0.030000000000000027,
+              "variance": 0.00410016,
+              "label": "pi_2"
+            },
+            {
+              "value": -0.04999999999999993,
+              "variance": 0.003926689999999999,
+              "label": "pi_1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
