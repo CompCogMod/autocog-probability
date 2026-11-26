@@ -249,6 +249,31 @@ def test_calibrated_theories_narrow_ranges_and_keep_predictions(tmp_path):
         assert np.allclose(orig.predict(p, _batch(), None), cal.predict(p, _batch(), None))
 
 
+def test_calibration_drops_unidentified_estimates_and_shares_common_ranges(tmp_path):
+    from src.probability_updating.calibrate import drop_unidentified, write_calibrated_theories
+    theories = {s: _load(s) for s in ("llo_bias", "llo_sampler")}
+    variation = pd.DataFrame({"sd_prior_logodds": [0.0, 1.0, 1.0], "sd_log_lr": [1.0, 1.0, 0.0],
+                              "n_abs_log_lr": [5, 5, 0]}, index=["fixed_prior", "ok", "fixed_llr"])
+    params = pd.DataFrame({
+        "group": ["fixed_prior", "ok", "fixed_llr", "ok"],
+        "theory": ["llo_sampler", "llo_sampler", "llo_sampler", "llo_bias"],
+        "alpha": [1.5, 2.999, 0.9, 0.8], "beta": [0.5, 0.6, 2.4, 0.7], "N": [50.0, 200.0, 20.0, np.nan],
+    })
+    out = drop_unidentified(params, theories, variation)
+    assert np.isnan(out.loc[0, "alpha"])          # every prior the same: alpha not identified
+    assert np.isnan(out.loc[1, "alpha"])          # on the fitting bound (3.0)
+    assert np.isnan(out.loc[2, "beta"])           # evidence never varies: beta not identified
+    assert out.loc[2, "alpha"] == 0.9 and out.loc[3, "alpha"] == 0.8
+    assert out.loc[1, "N"] == 200.0               # noise parameters are left alone
+
+    written = write_calibrated_theories([THEORY_DIR / "llo_bias.yaml", THEORY_DIR / "llo_sampler.yaml"],
+                                        tmp_path, params, variation=variation, share=True)
+    a, b = (parameter_bounds(Theory.from_yaml(written[s])) for s in ("llo_bias", "llo_sampler"))
+    for shared in ("alpha", "beta", "epsilon"):
+        assert a[shared] == b[shared], shared
+    assert 0.8 <= a["alpha"][0] <= a["alpha"][1] <= 0.9
+
+
 class _SchemaMock:
     """LLM stand-in that answers by requested schema: a fixed design or a fixed metric."""
 

@@ -1,0 +1,185 @@
+{
+  "rounds": [
+    {
+      "observations": [
+        {
+          "experiment": {
+            "rationale": "Both theories share the same mean structure (alpha*prior log-odds + beta*LLR), so the design targets the noise structure. The theories make three different predictions. (1) Shape of spread across belief levels. Constant log-odds noise gives an SD in probability space of about sigma*p(1-p), which collapses fast toward the extremes. Binomial sampling gives an SD of sqrt(p(1-p)/N), which shrinks only like the square root. So the ratio of SD at a distorted belief near 0.9-0.97 to SD at 0.5 is about 0.1-0.36 under the advocated theory versus about 0.17-0.6 under the sampling theory. (2) Shape and mean of the report distribution. Logit-normal noise yields skewed distributions with a tail toward 50%, and means in probability space are pulled toward 50% as sigma grows. Binomial means sit exactly at the target and are nearly symmetric for moderate N. (3) Extreme reports. With large sigma, logit noise puts real mass on 0%/100% when the belief is moderately extreme. The sampling theory puts mass at 0/100 only when Np(1-p) is small. Trial structure: priors (0.03 to 0.97) and LLRs (-2.94 to +3.89) are crossed rather than confounded. This includes zero-evidence trials at three priors (isolating alpha), evidence-only trials at prior 0.5 (isolating beta), congruent trials driving beliefs to the extremes, and conflicting trials landing near 50%. That gives several cells with similar distorted beliefs but different prior/LLR compositions, and others spanning the full belief range, so the SD-vs-mean curve can be traced. All evidence is given as a single aggregated signal (n_signals=1), so the likelihoods are unambiguous. With 12 unique trials each is repeated 5 times, which allows within-cell variance estimates. Rounding to 5/10% blurs exact values, so analyses should use SDs and interquartile spreads across cells rather than exact response values.",
+            "trial_priors": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.9,
+              0.9,
+              0.97,
+              0.1,
+              0.1,
+              0.9,
+              0.03,
+              0.3
+            ],
+            "trial_p_signal_h": [
+              0.5,
+              0.8,
+              0.95,
+              0.98,
+              0.5,
+              0.9,
+              0.95,
+              0.5,
+              0.9,
+              0.05,
+              0.05,
+              0.2
+            ],
+            "trial_p_signal_not_h": [
+              0.5,
+              0.2,
+              0.05,
+              0.02,
+              0.5,
+              0.1,
+              0.05,
+              0.5,
+              0.1,
+              0.95,
+              0.95,
+              0.8
+            ],
+            "trial_n_signals": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    import numpy as np\n    import pandas as pd\n    slopes = []\n    for sid, d in data.groupby('subject_id'):\n        key = d['prior'].round(4).astype(str) + '_' + d['log_lr'].round(3).astype(str)\n        xs = []\n        ys = []\n        for k, g in d.groupby(key):\n            r = np.sort(g['response'].values.astype(float))\n            n = len(r)\n            if n < 3:\n                continue\n            m = float(np.median(r))\n            if n >= 5:\n                s = r[n - 2] - r[1]\n            else:\n                s = r[-1] - r[0]\n            mm = min(max(m, 0.01), 0.99)\n            xs.append(np.log(mm * (1.0 - mm)))\n            ys.append(np.log(s + 0.02))\n        if len(xs) >= 4 and np.var(xs) > 1e-6:\n            xs = np.asarray(xs)\n            ys = np.asarray(ys)\n            xc = xs - xs.mean()\n            slope = float(np.sum(xc * (ys - ys.mean())) / np.sum(xc * xc))\n            slopes.append(slope)\n    if len(slopes) == 0:\n        return float('nan')\n    return float(np.mean(slopes))\n",
+            "rationale": "Both theories share the same mean structure (alpha*prior log-odds + beta*LLR), so they differ only in how within-cell response spread scales with the central belief m. Constant logit-normal noise gives spread proportional to m(1-m), so a log-log regression of within-cell spread on m(1-m) has slope near 1, a bit lower with large sigma or the floor effects. Binomial sampling gives spread proportional to sqrt(m(1-m)), so the slope is near 0.5. This holds whatever the noise scale (sigma or N), so parameter heterogeneity across subjects matters less. For each subject and each of the 12 cells (5 reps each), I take the cell median as m. The spread is a trimmed range: 2nd to 4th order statistic, which is robust to one lapse on each side. I then regress log(spread + 0.02) on log(m(1-m)), clipping m to [0.01, 0.99], and average the slopes across subjects. The 0.02 floor tames zero spreads caused by discretization and rounding. The 12 cells span beliefs from about 0.5 to above 0.99, which gives good leverage on the slope. I expect a slope of about 0.8-1 under the logit-noise theory and about 0.4-0.5 under the sampling theory."
+          },
+          "proposer_theory": {
+            "description": "Probability distortion is a systematic bias applied when the judgment is formed: people combine prior and evidence additively in log-odds space, as Bayes prescribes, but with the wrong weights. The posterior log-odds equal alpha times the prior log-odds plus beta times the log likelihood ratio. alpha < 1 is base-rate neglect (the prior is underweighted), beta < 1 is conservatism (the evidence is underweighted) and beta > 1 is overreaction; alpha = beta = 1 recovers Bayes. Because the distortion is a deterministic transformation, the same stimulus always yields the same central judgment; trial-to-trial variability is a separate, constant response noise in log-odds space (sigma), plus a lapse rate epsilon. The theory therefore predicts that mean distortion and response variability are unrelated: changing how noisy responses are does not change their average, and the average is a fixed linear function of prior and evidence log-odds.\n",
+            "predict_source": "def predict(parameters, stimulus, history):\n    # See bayes_noise.yaml for the stimulus / output contract.\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float))\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    mu = alpha * (np.log(prior) - np.log1p(-prior)) + beta * llr\n\n    edges = np.clip((np.arange(K + 1) - 0.5) / (K - 1), 0.0, 1.0)\n    with np.errstate(divide=\"ignore\"):\n        z_edges = np.log(edges) - np.log1p(-edges)\n    sigma = float(parameters[\"sigma\"])\n    probs = np.diff(ndtr((z_edges[None, :] - mu[:, None]) / sigma), axis=1)\n\n    eps = float(parameters[\"epsilon\"])\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probabilities):\n    probabilities = probabilities / probabilities.sum()\n    return int(np.random.choice(len(probabilities), p=probabilities))\n",
+            "parameters": {
+              "alpha": "[0.7325, 1.037]",
+              "beta": "[0.1248, 0.8789]",
+              "sigma": "[0.1955, 1.207]",
+              "epsilon": "[0.04915, 0.4149]"
+            },
+            "rationale": null
+          },
+          "proposer_label": "pi_1",
+          "real_value": null,
+          "real_variance": null,
+          "predicted_values": [
+            {
+              "value": 0.45485010656741837,
+              "variance": 0.0953038196249901,
+              "label": "pi_1"
+            },
+            {
+              "value": 0.18496604372392436,
+              "variance": 0.0811473421361078,
+              "label": "pi_2"
+            }
+          ]
+        },
+        {
+          "experiment": {
+            "rationale": "Both theories share the mean structure expit(alpha*prior log-odds + beta*LLR), so this design targets how response variability scales with the distorted belief p. It differs from the earlier design in three ways: fewer unique trials (10, so K=6 repeats each) for tighter within-cell SD estimates, a parameter-free anchor cell, and denser sampling of the extreme tails, where the theories diverge most.\n\n(1) Anchor: prior 0.5 with uninformative evidence (P=0.5 under both H and not-H). The belief is exactly 0.5 whatever alpha and beta are. So the SD here estimates 0.5/sqrt(N) under binomial sampling, and about 0.25*sigma under logit-normal noise. Every other cell's SD is then normalised by this one.\n\n(2) Predicted normalised SD ratio. Under sampling it is 2*sqrt(p(1-p)): 0.6 at p=0.9, 0.28 at p=0.98, 0.2 at p=0.99. Under constant logit noise it is roughly 4p(1-p): 0.36, 0.08 and 0.04. The ratio is also skewed, with a long tail toward 50%. The gap widens sharply in the tails. That is why several cells drive beliefs to 0.9-0.99 and 0.01-0.1 even under strong conservatism:\n- strong single evidence: LLR +2.94 and -4.6 at prior 0.5;\n- extreme priors with null evidence: 0.9 and 0.02, which isolate alpha;\n- congruent prior and evidence: 0.95 with LR 9, 0.05 with LR 1/19, and 0.99 with LR 4.\n\n(3) Asymmetry and skew. Under logit noise, extreme cells show right-skewed (low side) or left-skewed (high side) reports with tails reaching toward 50%. Binomial sampling gives compact distributions that pile at 0 or 100 when Np(1-p) is small. Analyses should therefore compare tail-cell SDs and IQRs, and the fraction of reports at least 15 points from the cell median, normalised by the anchor cell. These spread-based measures are robust to the 5/10% rounding.\n\n(4) Moderate cells: LLR +1.1 at prior 0.5, and the conflict cell prior 0.2 with LR 4. These trace the middle of the SD-vs-belief curve. They also pin down beta and alpha for mapping each cell to its p.\n\nEvidence is a single aggregated signal (n_signals=1), so the likelihoods are unambiguous.",
+            "trial_priors": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.9,
+              0.02,
+              0.95,
+              0.05,
+              0.99,
+              0.2
+            ],
+            "trial_p_signal_h": [
+              0.5,
+              0.75,
+              0.95,
+              0.01,
+              0.5,
+              0.5,
+              0.9,
+              0.05,
+              0.8,
+              0.8
+            ],
+            "trial_p_signal_not_h": [
+              0.5,
+              0.25,
+              0.05,
+              0.99,
+              0.5,
+              0.5,
+              0.1,
+              0.95,
+              0.2,
+              0.2
+            ],
+            "trial_n_signals": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    import numpy as np\n    import pandas as pd\n    d = data.copy()\n    d['prior_r'] = d['prior'].astype(float).round(3)\n    d['llr_r'] = d['log_lr'].astype(float).round(2)\n    d['resp'] = d['response'].astype(float)\n    med = d.groupby(['subject_id', 'prior_r', 'llr_r'])['resp'].transform('median')\n    d['dev'] = (d['resp'] - med).abs()\n    pr = d['prior_r'].values\n    ll = d['llr_r'].values\n    center = (np.isclose(pr, 0.5) & (np.abs(ll) < 0.01)) | (np.isclose(pr, 0.5) & np.isclose(ll, 1.10, atol=0.02)) | np.isclose(pr, 0.2)\n    tail = np.isclose(pr, 0.9) | np.isclose(pr, 0.02) | np.isclose(pr, 0.95) | np.isclose(pr, 0.05) | np.isclose(pr, 0.99)\n    if center.sum() == 0 or tail.sum() == 0:\n        return float('nan')\n    s_c = float(np.median(d.loc[center, 'dev'].values))\n    s_t = float(np.median(d.loc[tail, 'dev'].values))\n    return float(np.log((s_t + 0.005) / (s_c + 0.005)))\n",
+            "rationale": "Both theories share the same central tendency, expit(alpha*prior logodds + beta*LLR), but they scale trial-to-trial spread with belief differently. Binomial sampling gives SD of about sqrt(p(1-p)/N), plus a constant motor noise tau that does not shrink in the tails. Constant logit-normal noise gives SD of about sigma*p(1-p). The ratio of tail-cell spread to center-cell spread therefore cancels the subject's noise-level parameter (N or sigma) to first order. It is about 2*sqrt(q) (or more, given tau) under sampling and about 4q under logit noise, where q=p(1-p) is roughly 0.02-0.1 in the tail cells. At q around 0.03 that is roughly 0.35-0.6 versus 0.12.\n\nHow the metric is computed:\n- Deviations are taken from each subject x cell median, so alpha and beta shifts in location are removed.\n- Center cells are those with distorted beliefs near 0.5: prior .5 with null or weak evidence, and prior .2 with LR 4.\n- Tail cells are those with extreme priors and null or congruent evidence, so beliefs fall near 0.02-0.995 for any plausible alpha and beta.\n- The spread in each group is the pooled median absolute deviation. This is robust to lapses, which hit both groups alike, and to the 5/10% rounding.\n- The metric is the log ratio of tail spread to center spread, with a small floor added to each.\n\nPredicted values are about -0.7 to 0 under sampling and about -2 under logit noise. The same code works on single subjects and on pooled data."
+          },
+          "proposer_theory": {
+            "description": "Both mechanisms operate: people misweight prior and evidence when they form an internal belief, and then report that belief by sampling. The internal belief is expit(alpha * prior log-odds + beta * log LR) (base-rate neglect for alpha < 1, conservatism for beta < 1). The subject draws N mental samples from that belief and reports the proportion k/N in which H holds. The mean report therefore carries the log-odds distortion, while trial-to-trial variability is binomial: largest when the distorted belief is near 50% and vanishing near 0% and 100%. A small motor/reporting noise tau smears the discrete values onto the 0-100 scale, and a lapse rate epsilon gives occasional random reports. Non-integer N mixes neighbouring integer sample sizes.\n",
+            "predict_source": "def predict(parameters, stimulus, history):\n    # See bayes_noise.yaml for the stimulus / output contract.\n    from scipy.special import ndtr\n    from scipy.stats import binom\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float))\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    target = 1.0 / (1.0 + np.exp(-(alpha * (np.log(prior) - np.log1p(-prior)) + beta * llr)))\n\n    tau = float(parameters[\"tau\"])\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    edges[0], edges[-1] = -np.inf, np.inf\n\n    def report_dist(n):\n        k = np.arange(n + 1)\n        pmf = binom.pmf(k[None, :], n, target[:, None])\n        to_bins = np.diff(ndtr((edges[None, :] - (k / n)[:, None]) / tau), axis=1)\n        return pmf @ to_bins\n\n    N = float(parameters[\"N\"])\n    n0 = max(int(np.floor(N)), 1)\n    w = min(max(N - n0, 0.0), 1.0)\n    probs = report_dist(n0) if w == 0.0 else (1.0 - w) * report_dist(n0) + w * report_dist(n0 + 1)\n\n    eps = float(parameters[\"epsilon\"])\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probabilities):\n    probabilities = probabilities / probabilities.sum()\n    return int(np.random.choice(len(probabilities), p=probabilities))\n",
+            "parameters": {
+              "alpha": "[0.7325, 1.037]",
+              "beta": "[0.1248, 0.8789]",
+              "N": "[9.983, 200]",
+              "tau": "[0.005, 0.09912]",
+              "epsilon": "[0.04915, 0.4149]"
+            },
+            "rationale": null
+          },
+          "proposer_label": "pi_2",
+          "real_value": null,
+          "real_variance": null,
+          "predicted_values": [
+            {
+              "value": -0.38299225225610734,
+              "variance": 0.4915986390928216,
+              "label": "pi_2"
+            },
+            {
+              "value": -1.1260112628562244,
+              "variance": 0.656040539444335,
+              "label": "pi_1"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -210,18 +210,51 @@ The LLMs went for the easiest t-test win.
 
 **Fix before the next round** (open items, item 1).
 
+## 2026-11-26: Calibration fix and second design round
+
+**Calibration change** in `calibrate.py`, now the default in `main_probability_updating.py`:
+- **Unidentified estimates are dropped** before calibrating. These are estimates of how the belief is formed that a study could not pin down:
+  - α where the prior never varies: Augenblick 1a, Howe 1 and 3;
+  - β where the evidence never varies: Tappin control, Howe 3;
+  - γ with fewer than 3 evidence strengths;
+  - any of these sitting on the fitting bound.
+- **Shared parameters get one range.** Parameters declared by both seed theories are calibrated from their pooled estimates, giving one range:
+  - α ∈ [0.73, 1.04];
+  - β ∈ [0.12, 0.88];
+  - ε (lapse rate) shared too.
+- The old behaviour is available with `--keep_unidentified` and `--no_shared_params`.
+
+**Round 2 results** are in `.../design_llo_bias_vs_llo_sampler_anthropic-claude-opus-5.5_run2/designs.md`. The run made 4 Opus calls, and the first metric each side proposed passed the test.
+
+| Proposed by | Design | Metric | llo_bias | llo_sampler | p |
+|---|---|---|---|---|---|
+| `llo_bias` | 12 cells × 5 reps; priors .03–.97 crossed with single signals, log LR −2.9 to +3.9; zero-evidence cells at 3 priors | per-subject slope of log(within-cell trimmed range) on log(m(1−m)) | 0.45 | 0.19 | .0024 |
+| `llo_sampler` | 10 cells × 6 reps; a 50%/no-evidence anchor cell plus extreme cells (beliefs ≈ .02–.995) | log ratio of median absolute deviation in tail cells vs. center cells | −1.13 | −0.38 | .0011 |
+
+**Both metrics now test the noise mechanism.** Both measure how fast spread around the belief shrinks as the belief moves toward 0 or 1:
+- **Constant log-odds noise:** SD ∝ p(1−p), so spread collapses quickly in the tails.
+- **Binomial sampling:** SD ∝ √(p(1−p)/N), so spread shrinks only like the square root.
+
+The two designs converged on essentially the same idea.
+
+**Caveats:**
+- **The effects are smaller than Opus expected.** It predicted slopes near 1 vs. 0.5; the simulations give 0.45 vs. 0.19. Rounding, lapses, motor noise τ and the many fits with N ≈ 200 (where sampling is nearly noiseless) all dilute the difference.
+- **Between-subject variance is large** (t ≈ 3.2–3.5 at N = 25), so a real study needs more subjects or more reps.
+- **Repeated identical cells (5–6 reps) invite remembered answers,** which would shrink within-cell spread under either theory. A real study would need disguised repeats, e.g. different cover stories or colours with the same prior and LR.
+- **Both designs assume a 0–100% response scale.** The cross-study analysis suggests the response format itself shapes the noise, which these designs don't vary.
+
 ---
 
 ## Open items / next steps
 
-1. **Fix the calibration so that compared theories differ only in their noise, then rerun the design round.** Round 1 (2026-11-26) separated the theories through α ranges that are calibration artifacts. Options:
-   - give both theories the same mean-rule parameter ranges (α, β);
-   - calibrate only from studies where a parameter is identified (prior varies; estimate not at a bound);
-   - or both.
+1. **Next design rounds.** The calibration is fixed (2026-11-26). Options:
+   - pit other pairs against each other, e.g. `--seeds weak_strong_evidence bayesian_sampler`;
+   - ask for designs that vary the response format and use disguised repeats;
+   - run more rounds (`--n_rounds`).
 
-   Command used for round 1:
+   Command for a design round:
    ```bash
-   uv run --with anthropic python main_probability_updating.py --design_only --llm_provider openrouter --llm_model anthropic/claude-opus-5.5 --reasoning_effort high --run_id 1
+   uv run --with anthropic python main_probability_updating.py --design_only --llm_provider openrouter --llm_model anthropic/claude-opus-5.5 --reasoning_effort high --run_id 2
    ```
 2. **Run the full loop** with a ground-truth theory, e.g. `--ground_truth weak_strong_evidence`. This tests whether the arbiter and improver recover the true theory.
 3. **Get Möbius (2022) and Loibl & Leuders (2025)**, convert them, and refit.

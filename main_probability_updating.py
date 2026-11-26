@@ -56,8 +56,10 @@ from src.probability_updating.calibrate import (  # noqa: E402
     DEFAULT_FITS,
     load_fit_params,
     reporting_rates,
+    stimulus_variation,
     write_calibrated_theories,
 )
+from src.probability_updating.data import load_trials  # noqa: E402
 from src.probability_updating.experiment import ProbabilityUpdatingExperiment  # noqa: E402
 from src.run_config import REAL_N_SUBJECTS  # noqa: E402
 from src.theory import Theory  # noqa: E402
@@ -250,6 +252,12 @@ def build_parser() -> argparse.ArgumentParser:
                     help="range of per-study estimates that becomes each parameter's range")
     ap.add_argument("--no_calibration", action="store_true",
                     help="use the theories' full fitting bounds and no rounding stage")
+    ap.add_argument("--keep_unidentified", action="store_true",
+                    help="calibrate from every study's estimates, including mean-rule parameters "
+                         "the study could not identify (no prior/evidence variation, or on the bound)")
+    ap.add_argument("--no_shared_params", action="store_true",
+                    help="calibrate each seed theory's ranges separately, even for parameters "
+                         "both declare (by default those get one range from the pooled estimates)")
     ap.add_argument("--llm_provider", default="gemini")
     ap.add_argument("--llm_model", default="gemini-3.1-pro-preview")
     ap.add_argument("--reasoning_effort", default=None)
@@ -274,8 +282,15 @@ def main(argv: list[str] | None = None) -> None:
         paths = {p.stem: p for p in sources}
     else:
         fit_params = load_fit_params(args.fits)
-        paths = write_calibrated_theories(sources, run_dir / "seed_theories", fit_params,
-                                          tuple(args.quantiles))
+        variation = None if args.keep_unidentified else stimulus_variation(load_trials())
+        out_dir = run_dir / "seed_theories"
+        seed_sources = [THEORY_DIR / f"{s}.yaml" for s in dict.fromkeys(args.seeds)]
+        paths = write_calibrated_theories(seed_sources, out_dir, fit_params, tuple(args.quantiles),
+                                          variation=variation, share=not args.no_shared_params)
+        others = [p for p in sources if p.stem not in paths]
+        if others:  # the stand-in ground truth keeps its own ranges
+            paths |= write_calibrated_theories(others, out_dir, fit_params, tuple(args.quantiles),
+                                               variation=variation, share=False)
         r10, r5 = reporting_rates(fit_params)
         EXPERIMENT_CLASS.set_reporting(r10, r5)
         info(f"[main] calibrated {', '.join(paths)} from {args.fits}; rounding: "
