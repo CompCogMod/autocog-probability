@@ -1,0 +1,221 @@
+{
+  "rounds": [
+    {
+      "observations": [
+        {
+          "experiment": {
+            "rationale": "The design targets how response variability scales with the level of the distorted belief, while keeping the mean model (alpha times prior log-odds plus beta times LLR) identical in both theories. Prior log-odds and evidence LLR are crossed independently so alpha and beta are identifiable. Each trial uses a single signal (n=1) so the LLR is simply log(p_h/p_not_h), with values 0, +/-1.39, +/-2.94 and +/-4.6. Priors range over 0.01, 0.05, 0.2, 0.5, 0.8, 0.95 and 0.99.\n\nThe cells are:\n(a) A pure 50% cell, where both theories predict maximal spread.\n(b) Evidence-only cells at prior 0.5.\n(c) Prior-only cells at 0.01 and 0.99 with uninformative evidence.\n(d) Congruent extreme cells (0.99 with 0.99/0.01, 0.01 with 0.01/0.99, 0.8 with 0.95/0.05, 0.05 with 0.2/0.8). These push the distorted belief toward 0 or 100.\n(e) Conflict cells (0.95 with 0.05/0.95, 0.2 with 0.8/0.2). These land near 50% but via large opposing components.\n\nAdvocated theory (logit-normal noise with constant sigma): the probability-scale SD is about sigma*p(1-p). It collapses quickly toward the extremes, so the SD at 95% is roughly 0.19 times the SD at 50%. The median sits at expit(mu) and the mean is pulled toward 50%. Exact 0% or 100% reports should be essentially absent, apart from lapses.\n\nCompeting theory (binomial sampling): the SD is sqrt(p(1-p)/N), so the SD at 95% is about 0.44 times the SD at 50%, a much flatter profile. The mean equals the target exactly. Extreme cells should produce a large mass of exact 0/100 (k=0 or k=N) reports, e.g. more than 50% of responses when the target is 97% and N=20.\n\nKey diagnostics, all robust to rounding to 5 or 10%:\n- The ratio of spread (IQR or SD) in the extreme cells versus the 50% and conflict cells.\n- The frequency of 0/100 endpoint reports in extreme cells relative to the lapse baseline.\n- Whether conflict cells, which share a near-50% belief, show the same variability as the pure 50% cell. Both theories say they should, which checks that variance depends only on the belief level.\n\nThe advocated theory predicts steep variance compression and few endpoint reports. The competing theory predicts a shallow sqrt-shaped profile and heavy endpoint mass. Twelve unique trials give K=5 repeats each.",
+            "trial_priors": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.99,
+              0.01,
+              0.99,
+              0.01,
+              0.95,
+              0.2,
+              0.8,
+              0.05
+            ],
+            "trial_p_signal_h": [
+              0.5,
+              0.8,
+              0.99,
+              0.01,
+              0.5,
+              0.5,
+              0.99,
+              0.01,
+              0.05,
+              0.8,
+              0.95,
+              0.2
+            ],
+            "trial_p_signal_not_h": [
+              0.5,
+              0.2,
+              0.01,
+              0.99,
+              0.5,
+              0.5,
+              0.01,
+              0.99,
+              0.95,
+              0.2,
+              0.05,
+              0.8
+            ],
+            "trial_n_signals": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    import numpy as np\n    d = data.copy()\n    b = d['bayes'].astype(float).values\n    # moderately extreme cells: Bayesian posterior strongly on one side but not ~certain\n    # (excludes the near-certain 0.99/0.99 cells where both theories pile up at 100)\n    sel = ((b >= 0.95) & (b <= 0.996)) | ((b <= 0.05) & (b >= 0.004))\n    d = d[sel]\n    if len(d) == 0:\n        return 0.5\n    rb = d['response_bin'].astype(float).values\n    up = d['bayes'].astype(float).values > 0.5\n    folded = np.where(up, rb, 100.0 - rb)\n    window = folded >= 90\n    n_win = int(window.sum())\n    if n_win == 0:\n        return 0.5\n    n_end = int((folded >= 100).sum())\n    return float(n_end) / float(n_win)\n",
+            "rationale": "In the moderately extreme cells (Bayes posterior 0.95-0.99 or 0.01-0.05: trials 3,4,5,6,11,12) the distorted belief typically sits around 91-98%. I fold responses toward the favoured side and, among responses in the near-extreme window (>=90%), compute the share that are exactly at the endpoint (100% / 0%). Logit-normal noise (advocated) is a smooth distribution in log-odds that can't pile up at the boundary: its mode sits at expit(mu) (e.g. 96-98%), and reaching the 100 bin requires z > logit(0.995)=5.3, so endpoint share stays low (mostly coming from the shared rounding stage). Binomial sampling (competing) puts mass at k=N, and its Gaussian motor smear tau has open outer bin edges, so every bit of smeared mass above 99.5% lands in the 100 bin; its folded near-extreme distribution therefore has its mode AT the endpoint. The conditional ratio (endpoint / all >=90) removes most dependence on alpha/beta and lapse rate (lapses contribute only ~11/101 of their mass to the window), and the shared rounding affects both theories identically. Pooling 30 trials per subject keeps per-subject estimates reasonably stable, with expected values roughly 0.2-0.3 for logit-normal versus ~0.45-0.6 for binomial-sampling."
+          },
+          "proposer_theory": {
+            "description": "Probability distortion is a systematic bias applied when the judgment is formed: people combine prior and evidence additively in log-odds space, as Bayes prescribes, but with the wrong weights. The posterior log-odds equal alpha times the prior log-odds plus beta times the log likelihood ratio. alpha < 1 is base-rate neglect (the prior is underweighted), beta < 1 is conservatism (the evidence is underweighted) and beta > 1 is overreaction; alpha = beta = 1 recovers Bayes. Because the distortion is a deterministic transformation, the same stimulus always yields the same central judgment; trial-to-trial variability is a separate, constant response noise in log-odds space (sigma), plus a lapse rate epsilon. The theory therefore predicts that mean distortion and response variability are unrelated: changing how noisy responses are does not change their average, and the average is a fixed linear function of prior and evidence log-odds.\n",
+            "predict_source": "def predict(parameters, stimulus, history):\n    # See bayes_noise.yaml for the stimulus / output contract.\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float))\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    mu = alpha * (np.log(prior) - np.log1p(-prior)) + beta * llr\n\n    edges = np.clip((np.arange(K + 1) - 0.5) / (K - 1), 0.0, 1.0)\n    with np.errstate(divide=\"ignore\"):\n        z_edges = np.log(edges) - np.log1p(-edges)\n    sigma = float(parameters[\"sigma\"])\n    probs = np.diff(ndtr((z_edges[None, :] - mu[:, None]) / sigma), axis=1)\n\n    eps = float(parameters[\"epsilon\"])\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probabilities):\n    probabilities = probabilities / probabilities.sum()\n    return int(np.random.choice(len(probabilities), p=probabilities))\n",
+            "parameters": {
+              "alpha": "[0.7325, 1.037]",
+              "beta": "[0.1248, 0.8789]",
+              "sigma": "[0.1955, 1.207]",
+              "epsilon": "[0.04915, 0.4149]"
+            },
+            "rationale": null
+          },
+          "proposer_label": "pi_1",
+          "real_value": 0.14004914004914004,
+          "real_variance": 0.0061828676083735415,
+          "predicted_values": [
+            {
+              "value": 0.16753926701570682,
+              "variance": 0.006770341936270352,
+              "label": "pi_1"
+            },
+            {
+              "value": 0.3688172043010753,
+              "variance": 0.0216727400310353,
+              "label": "pi_2"
+            },
+            {
+              "value": 0.16749256689791872,
+              "variance": 0.009055095887219256,
+              "label": "pi_3"
+            }
+          ],
+          "data_path": "data/round_000_obs_00.jsonl"
+        },
+        {
+          "experiment": {
+            "rationale": "This design tests the advocated theory's distinctive signature: binomial report variability around a log-odds-distorted belief. The alternative is logit-normal noise with constant sigma around the same distorted belief. Both theories share the mean structure alpha*prior log-odds + beta*LLR. The design therefore crosses priors (0.05, 0.2, 0.5, 0.8, 0.95) with single-draw evidence (LLR 0, \u00b11.10, \u00b12.20, \u00b13.89) so alpha and beta are identified separately from the variability structure.\n\nThe design deliberately places many cells where the distorted belief lands in the 75-95% (or 5-25%) band rather than at the far extremes. That is where the two variance laws separate most clearly while the means remain matched.\n\nBinomial prediction (advocated): SD = sqrt(p(1-p)/N). For example, with N\u224820 the SD is about 0.067 at p=0.9 versus 0.112 at 0.5, a ratio of about 0.6.\n\nLogit-normal prediction (competing): SD \u2248 sigma*p(1-p), so the same comparison gives a ratio of about 0.36. Its spread therefore collapses much faster away from 50%.\n\nCongruent cells (0.8 with 0.9/0.1; 0.95 with 0.98/0.02; mirrored low cells) push the belief toward the ends. There, binomial sampling predicts a substantial pile-up of exact 0%/100% reports (k=0 or k=N), e.g. P(k=N)=0.9^20\u224812% at p=0.9, and more at higher p. Logit-normal noise yields a smooth tail with endpoint mass that grows only slowly and continuously. Exact 0 and 100 survive the 5/10% rounding stage, so endpoint frequency relative to the lapse floor is a rounding-robust diagnostic.\n\nPrior-only cells (0.8, 0.95 with uninformative evidence) and evidence-only cells at prior 0.5 let us check that variability depends only on the level of the distorted belief, not on its source.\n\nConflict cells (0.95 with 0.1/0.9; 0.2 with 0.9/0.1) put the belief near 50-75% via opposing components. Both theories predict variance set by the belief level alone, which serves as a consistency check.\n\nKey metrics:\n(1) the slope of IQR/SD versus the model-implied belief level, comparing the binomial sqrt profile with the logit-normal p(1-p) profile;\n(2) endpoint (0/100) frequency in congruent cells versus the 50% cell;\n(3) mean versus median asymmetry. Binomial means equal the target, whereas logit-normal means are pulled toward 50% relative to medians.\n\nTwelve unique trials give K=5 repeats each.",
+            "trial_priors": [
+              0.5,
+              0.5,
+              0.5,
+              0.5,
+              0.8,
+              0.95,
+              0.8,
+              0.95,
+              0.2,
+              0.05,
+              0.95,
+              0.2
+            ],
+            "trial_p_signal_h": [
+              0.5,
+              0.75,
+              0.9,
+              0.98,
+              0.5,
+              0.5,
+              0.9,
+              0.98,
+              0.1,
+              0.02,
+              0.1,
+              0.9
+            ],
+            "trial_p_signal_not_h": [
+              0.5,
+              0.25,
+              0.1,
+              0.02,
+              0.5,
+              0.5,
+              0.1,
+              0.02,
+              0.9,
+              0.98,
+              0.9,
+              0.1
+            ],
+            "trial_n_signals": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          },
+          "metric": {
+            "metric_source": "def metric(data: pd.DataFrame) -> float:\n    d = data.copy()\n    d['pk'] = d['prior'].astype(float).round(3)\n    d['lk'] = d['log_lr'].astype(float).round(2)\n    d['med'] = d.groupby(['subject_id', 'pk', 'lk'])['response'].transform('median')\n    d['dev'] = (d['response'].astype(float) - d['med']).abs()\n    def mask_for(cells):\n        m = np.zeros(len(d), dtype=bool)\n        pr = d['prior'].astype(float).values\n        ll = d['log_lr'].astype(float).values\n        for p, l in cells:\n            m |= (np.abs(pr - p) < 0.01) & (np.abs(ll - l) < 0.05)\n        return m\n    ext_cells = [(0.95, 0.0), (0.95, 3.89), (0.05, -3.89)]\n    mid_cells = [(0.5, 0.0), (0.5, 1.10), (0.2, 2.20)]\n    ext = d.loc[mask_for(ext_cells), 'dev'].values\n    mid = d.loc[mask_for(mid_cells), 'dev'].values\n    if len(ext) == 0 or len(mid) == 0:\n        return float('nan')\n    return float(np.log((np.median(ext) + 0.01) / (np.median(mid) + 0.01)))\n",
+            "rationale": "Shape of the variance law, measured within subject as a ratio so that overall noise level (N, tau vs sigma), which overlaps between theories, cancels. For each subject x cell, take absolute deviations of responses from the cell median (robust to the large lapse rates), pool them over cells whose distorted belief is reliably extreme for ANY admissible alpha/beta (prior .95 with no evidence, .95 with LLR +3.89, .05 with LLR -3.89; belief ~0.90-0.998), and over mid-range cells (prior .5 with LLR 0 or +1.10, prior .2 with LLR +2.2; belief ~0.25-0.72). Metric = log((median extreme dev + .01)/(median mid dev + .01)). Logit-normal noise scales as sigma*p(1-p): spread at p~0.95-0.99 collapses to ~4-20% of mid spread (log ratio strongly negative, about -1.5 to -2). Binomial sampling scales as sqrt(p(1-p)/N) and the motor noise tau adds a probability-space floor that does not shrink near the ends, so extreme spread stays ~40-100% of mid spread (log ratio near -0.5 to 0). The +0.01 floor guards against 1-point discretization; the median-based deviations resist lapses and the 5/10% rounding stage affects both theories similarly."
+          },
+          "proposer_theory": {
+            "description": "Both mechanisms operate: people misweight prior and evidence when they form an internal belief, and then report that belief by sampling. The internal belief is expit(alpha * prior log-odds + beta * log LR) (base-rate neglect for alpha < 1, conservatism for beta < 1). The subject draws N mental samples from that belief and reports the proportion k/N in which H holds. The mean report therefore carries the log-odds distortion, while trial-to-trial variability is binomial: largest when the distorted belief is near 50% and vanishing near 0% and 100%. A small motor/reporting noise tau smears the discrete values onto the 0-100 scale, and a lapse rate epsilon gives occasional random reports. Non-integer N mixes neighbouring integer sample sizes.\n",
+            "predict_source": "def predict(parameters, stimulus, history):\n    # See bayes_noise.yaml for the stimulus / output contract.\n    from scipy.special import ndtr\n    from scipy.stats import binom\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float))\n    alpha = float(parameters[\"alpha\"])\n    beta = float(parameters[\"beta\"])\n    target = 1.0 / (1.0 + np.exp(-(alpha * (np.log(prior) - np.log1p(-prior)) + beta * llr)))\n\n    tau = float(parameters[\"tau\"])\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    edges[0], edges[-1] = -np.inf, np.inf\n\n    def report_dist(n):\n        k = np.arange(n + 1)\n        pmf = binom.pmf(k[None, :], n, target[:, None])\n        to_bins = np.diff(ndtr((edges[None, :] - (k / n)[:, None]) / tau), axis=1)\n        return pmf @ to_bins\n\n    N = float(parameters[\"N\"])\n    n0 = max(int(np.floor(N)), 1)\n    w = min(max(N - n0, 0.0), 1.0)\n    probs = report_dist(n0) if w == 0.0 else (1.0 - w) * report_dist(n0) + w * report_dist(n0 + 1)\n\n    eps = float(parameters[\"epsilon\"])\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+            "policy_source": "def policy(probabilities):\n    probabilities = probabilities / probabilities.sum()\n    return int(np.random.choice(len(probabilities), p=probabilities))\n",
+            "parameters": {
+              "alpha": "[0.7325, 1.037]",
+              "beta": "[0.1248, 0.8789]",
+              "N": "[9.983, 200]",
+              "tau": "[0.005, 0.09912]",
+              "epsilon": "[0.04915, 0.4149]"
+            },
+            "rationale": null
+          },
+          "proposer_label": "pi_2",
+          "real_value": -1.5040773967762742,
+          "real_variance": 0.40259677257581694,
+          "predicted_values": [
+            {
+              "value": -0.40546510810816444,
+              "variance": 0.4604821918673978,
+              "label": "pi_2"
+            },
+            {
+              "value": -1.6094379124340994,
+              "variance": 0.6513894355953087,
+              "label": "pi_1"
+            },
+            {
+              "value": -1.3862943611198895,
+              "variance": 0.5245815235601384,
+              "label": "pi_3"
+            }
+          ],
+          "data_path": "data/round_000_obs_01.jsonl"
+        }
+      ],
+      "next_theory": {
+        "description": "Noisy log-odds encoding with Weber-scaled noise and Bayesian shrinkage. Distortion in probability updating comes from noise, not from fixed mis-weighting.\n\nEncoding:\n- The stated prior is converted to log-odds, L0 = logit(prior). The evidence is represented by its log likelihood ratio, LLR.\n- Each quantity x_i is encoded as a Gaussian sample m_i ~ N(x_i, sd_i^2).\n- The noise sd has a constant part plus a part proportional to magnitude (scalar, Weber-like variability): sd_i = s0 + w*|x_i|, with w strictly positive.\n\nDecoding:\n- The subject does not know the true magnitudes, so it decodes each measurement with Bayesian shrinkage toward 0.\n- The decoder uses a zero-mean Gaussian prior over log-odds, with spread lambda_p for priors and lambda_e for evidence.\n- Each decoded value is k_i*m_i, with gain k_i = lambda_i^2 / (lambda_i^2 + sd_i^2).\n- The decoded posterior log-odds is the sum k_p*m_p + k_e*m_e.\n\nReport:\n- The subject reports expit of the decoded log-odds, after a small extra response noise in log-odds (sigma_r).\n- With lapse probability epsilon, the report is random.\n\nPredictions:\n- Effective weights alpha_eff = k_p and beta_eff = k_e fall as stimulus magnitude grows. Response log-odds are therefore a concave, saturating function of |prior log-odds| and |LLR|, with more conservatism and base-rate neglect for extreme inputs.\n- Single-source extreme cells (prior 0.99 or LLR 4.6 alone) are pulled to roughly 93\u201397%, not 99\u2013100%. This keeps exact-100 reports rare.\n- Congruent cells still add up to very high, tightly clustered beliefs.\n- Log-odds variability grows with |L0| and |LLR|, so conflict cells are more variable than the pure 50/50 cell.\n- Mean distortion and variability are coupled: subjects or cells with more encoding noise show more conservatism and more base-rate neglect.",
+        "predict_source": "def predict(parameters, stimulus, history):\n    import numpy as np\n    from scipy.special import ndtr\n    K = 101\n    scalar = np.ndim(stimulus[\"prior\"]) == 0\n    prior = np.clip(np.atleast_1d(np.asarray(stimulus[\"prior\"], dtype=float)), 1e-6, 1 - 1e-6)\n    llr = np.atleast_1d(np.asarray(stimulus[\"log_lr\"], dtype=float)) * np.ones_like(prior)\n    L0 = np.log(prior) - np.log1p(-prior)\n\n    s0 = float(parameters[\"s0\"])\n    w = float(parameters[\"w\"])\n    lam_p = float(parameters[\"lambda_p\"])\n    lam_e = float(parameters[\"lambda_e\"])\n    sig_r = float(parameters[\"sigma_r\"])\n    eps = float(parameters[\"epsilon\"])\n\n    # Weber-scaled encoding noise in log-odds space\n    sd_p = s0 + w * np.abs(L0)\n    sd_e = s0 + w * np.abs(llr)\n    # Bayesian shrinkage gains (zero-mean Gaussian prior over log-odds)\n    k_p = lam_p ** 2 / (lam_p ** 2 + sd_p ** 2)\n    k_e = lam_e ** 2 / (lam_e ** 2 + sd_e ** 2)\n\n    mu = k_p * L0 + k_e * llr\n    sd = np.sqrt((k_p * sd_p) ** 2 + (k_e * sd_e) ** 2 + sig_r ** 2)\n    sd = np.maximum(sd, 1e-3)\n\n    edges = (np.arange(K + 1) - 0.5) / (K - 1)\n    z_edges = np.empty(K + 1)\n    z_edges[0] = -np.inf\n    z_edges[-1] = np.inf\n    inner = edges[1:-1]\n    z_edges[1:-1] = np.log(inner) - np.log1p(-inner)\n\n    cdf = ndtr((z_edges[None, :] - mu[:, None]) / sd[:, None])\n    probs = np.diff(cdf, axis=1)\n    probs = np.clip(probs, 0.0, None)\n    probs = (1.0 - eps) * probs + eps / K\n    probs = probs / probs.sum(axis=1, keepdims=True)\n    return probs[0] if scalar else probs\n",
+        "policy_source": "def policy(probs):\n    import numpy as np\n    p = np.asarray(probs, dtype=np.float64)\n    p = np.clip(p, 0.0, None)\n    p /= p.sum()\n    return int(np.random.choice(len(p), p=p))\n",
+        "parameters": {
+          "s0": "[0.1, 0.5]",
+          "w": "[0.05, 0.35]",
+          "lambda_p": "[1.3, 2.7]",
+          "lambda_e": "[0.7, 2.5]",
+          "sigma_r": "[0.05, 0.4]",
+          "epsilon": "[0.04, 0.35]"
+        },
+        "rationale": "This is a minimal-diff edit: the predict and policy code are verbatim, and only the parameter ranges change. That follows the critic's diagnosis that the problem is calibration, not mechanism.\n\nWhy the old ranges failed Experiment 1:\n- With lambda_p up to 8, k_p was about 1 even at |L0| = 4.6. The prior-0.99 cell therefore had mean log-odds near 4.5.\n- The Weber term widened its spread to about 1.4, so the right tail crossed logit(0.995) about 5.3 too often.\n- Combined with the shared rounding stage (values of 95 or more become 100 on 13% of trials), this gave 0.27 exact-100 reports in the window versus 0.14 observed.\n\nWhat the new ranges do:\n- lambda_p is now [1.3, 2.7] and lambda_e [0.7, 2.5]. Shrinkage therefore bites at large magnitudes: k_p is about 0.72 at |L0| = 4.6 but about 0.92 at |L0| = 1.39, and k_e is about 0.6 at LLR 4.6 but about 0.9 at LLR 1.1.\n- w is now [0.05, 0.35] (strictly positive) and s0 [0.1, 0.5]. Decoded spread in extreme cells then sits around 0.8\u20131.0 log-odds, not 1.4.\n- In the Experiment 1 window cells, means fall to about 2.8\u20133.6 log-odds. A back-of-envelope calculation including rounding gives an exact-100 share of about 0.14\u20130.16.\n\nWhy I did not adopt the critic's other suggestions:\n- **Posterior-level shrinkage:** I deliberately did not add it. The same estimate shows it would pull the highly congruent Experiment 2 extreme cells (0.95 with 3.89, Bayes about 0.999) down to about 97%. That would inflate their deviations and overshoot the Experiment 2 metric (about -1.1 versus the observed -1.5).\n- **Very large w (up to 0.9):** rejected for the same reason.\n- **Epsilon floor of 0.01:** not adopted. The uniform lapse contributes an end-share of only about 0.1, which helps Experiment 1. It also slightly raises extreme-cell deviations, which helps Experiment 2.\n\nExpected effect on Experiment 2:\n- Congruent cells still sum to about 5 log-odds with tight probability-scale deviations (about 0.005\u20130.01).\n- The single-source prior-0.95 cell sits at about 92%, with moderate spread.\n- Mid cells keep deviations of about 0.08\u20130.13.\n- Together these give a predicted metric of about -1.55, close to the observed -1.50.\n\nThe theory's distinctive predictions are retained: saturating weights, magnitude-scaled variance, and coupling between noise and conservatism."
+      },
+      "next_theory_idx": 2,
+      "next_theory_label": "pi_3"
+    }
+  ]
+}

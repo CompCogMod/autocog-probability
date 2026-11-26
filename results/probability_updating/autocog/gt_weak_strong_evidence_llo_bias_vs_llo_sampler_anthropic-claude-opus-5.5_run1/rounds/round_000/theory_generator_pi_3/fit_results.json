@@ -1,0 +1,18 @@
+[
+  {
+    "observation_index": 0,
+    "human_value": 0.14004914004914004,
+    "human_variance": 0.0061828676083735415,
+    "model_value": 0.16682926829268294,
+    "model_variance": 0.009844547808224325,
+    "metric_rationale": "In the moderately extreme cells (Bayes posterior 0.95-0.99 or 0.01-0.05: trials 3,4,5,6,11,12) the distorted belief typically sits around 91-98%. I fold responses toward the favoured side and, among responses in the near-extreme window (>=90%), compute the share that are exactly at the endpoint (100% / 0%). Logit-normal noise (advocated) is a smooth distribution in log-odds that can't pile up at the boundary: its mode sits at expit(mu) (e.g. 96-98%), and reaching the 100 bin requires z > logit(0.995)=5.3, so endpoint share stays low (mostly coming from the shared rounding stage). Binomial sampling (competing) puts mass at k=N, and its Gaussian motor smear tau has open outer bin edges, so every bit of smeared mass above 99.5% lands in the 100 bin; its folded near-extreme distribution therefore has its mode AT the endpoint. The conditional ratio (endpoint / all >=90) removes most dependence on alpha/beta and lapse rate (lapses contribute only ~11/101 of their mass to the window), and the shared rounding affects both theories identically. Pooling 30 trials per subject keeps per-subject estimates reasonably stable, with expected values roughly 0.2-0.3 for logit-normal versus ~0.45-0.6 for binomial-sampling."
+  },
+  {
+    "observation_index": 1,
+    "human_value": -1.5040773967762742,
+    "human_variance": 0.40259677257581694,
+    "model_value": -1.5040773967762742,
+    "model_variance": 0.8251620266404361,
+    "metric_rationale": "Shape of the variance law, measured within subject as a ratio so that overall noise level (N, tau vs sigma), which overlaps between theories, cancels. For each subject x cell, take absolute deviations of responses from the cell median (robust to the large lapse rates), pool them over cells whose distorted belief is reliably extreme for ANY admissible alpha/beta (prior .95 with no evidence, .95 with LLR +3.89, .05 with LLR -3.89; belief ~0.90-0.998), and over mid-range cells (prior .5 with LLR 0 or +1.10, prior .2 with LLR +2.2; belief ~0.25-0.72). Metric = log((median extreme dev + .01)/(median mid dev + .01)). Logit-normal noise scales as sigma*p(1-p): spread at p~0.95-0.99 collapses to ~4-20% of mid spread (log ratio strongly negative, about -1.5 to -2). Binomial sampling scales as sqrt(p(1-p)/N) and the motor noise tau adds a probability-space floor that does not shrink near the ends, so extreme spread stays ~40-100% of mid spread (log ratio near -0.5 to 0). The +0.01 floor guards against 1-point discretization; the median-based deviations resist lapses and the 5/10% rounding stage affects both theories similarly."
+  }
+]

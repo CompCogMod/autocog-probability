@@ -243,6 +243,38 @@ The two designs converged on essentially the same idea.
 - **Repeated identical cells (5–6 reps) invite remembered answers,** which would shrink within-cell spread under either theory. A real study would need disguised repeats, e.g. different cover stories or colours with the same prior and LR.
 - **Both designs assume a 0–100% response scale.** The cross-study analysis suggests the response format itself shapes the noise, which these designs don't vary.
 
+## 2026-11-26: Full loop, `weak_strong_evidence` as ground truth (1 round)
+
+**Setup.**
+- `weak_strong_evidence` stands in for people. Its calibrated ranges are α [0.64, 1.00], β [0.32, 1.01], γ [0.44, 1.01] and σ [0.17, 1.13].
+- Seed theories: `llo_bias` (π1) and `llo_sampler` (π2).
+- Model: Opus 5.5, reasoning effort "high".
+- Results: `results/probability_updating/autocog/gt_weak_strong_evidence_llo_bias_vs_llo_sampler_anthropic-claude-opus-5.5_run1/`, in `designs.md`, `leaderboard.md` and `rounds/round_000/`.
+
+**Designs.** Both target the noise again, and both passed the test at p < 10⁻⁶.
+
+| Proposed by | Metric | llo_bias | llo_sampler | ground truth |
+|---|---|---|---|---|
+| π1 | share of answers at exactly 0% or 100%, among near-extreme answers (≥ 90% after folding) | 0.17 | 0.37 | **0.14** |
+| π2 | log ratio of spread in extreme vs. mid cells | −1.61 | −0.41 | **−1.50** |
+
+**Arbitration.** The arbiter scored π1 = 1.0 and π2 = 0.0. That is correct on the noise question: the ground truth has log-odds Gaussian noise, as `llo_bias` does, and produces few exact 0%/100% answers, with spread that collapses toward the ends of the scale.
+
+**New theory (π3, replaced π2).** The theory generator wrote a *noisy log-odds encoding* model:
+- The prior log-odds and the evidence LLR are each encoded with Gaussian noise that has a constant part and a part growing with magnitude (Weber-like): sd = s0 + w·|x|.
+- Each is then decoded with Bayesian shrinkage toward 0 (gain k = λ²/(λ² + sd²)).
+- The report is expit of the decoded log-odds, plus a small amount of response noise and a lapse rate.
+
+It scored 0.991, close to π1. Its second attempt kept the code and changed only the parameter ranges, which cut its loss from 0.33 to 0.06.
+
+**Interpretation.**
+- **The loop answers the noise question correctly.** It discarded the sampler and kept log-odds noise.
+- **It did not recover the ground truth's mean rule, and couldn't have.** Neither design varied the evidence strength enough to test curvature in |LLR|, so π1, with linear weights, scores 1.0 even though the truth has γ < 1.
+- **π3 partly reinvents the weak/strong pattern from a mechanism.** Its shrinkage grows with magnitude, so strong evidence is under-weighted more than weak evidence, which is concave in |LLR|. But its gain k is at most 1, so it can never *over*-react to weak evidence, which is the core claim of Augenblick et al. A design that varies |LLR| finely, including weak signals at prior 50%, would separate π1, π3 and the truth. The arbiter itself recommended exactly this.
+- **π3 predicts more variance in conflict cells than at 50%/no evidence, and a link between noise and conservatism.** It is a testable alternative to the hypothesis that the bias comes in at decision time.
+
+**Next:** run more rounds (`--n_rounds 3`, resuming this run) so that π1 vs. π3 get designs that test curvature.
+
 ---
 
 ## Open items / next steps
